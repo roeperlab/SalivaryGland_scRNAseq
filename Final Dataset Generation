@@ -1,15 +1,19 @@
 # Processing of data generated through cellranger. Start here to generate R seurat object used in the paper from the original cellranger outputs. 
 # If you would like to skip this step and load in the final dataset please load in may2024.rds found in GEO database, accession number XXXXXXXX.
 
-# This code generatings the following files 
-# * may2024_cellspreremoval.rds file (plotted in figure S2) 
+# This code generatings the following: 
+# * may2024_cellspreremoval.rds file (plotted in figure S2A and S2A') 
+# * Clustree figure (plotted in figure S2A" and S2B)
+# * Marker gene lists used for GO term generation for clusters (found in figure S2B')
+# * postQC.sct_Rplremoved (plotted in figure S2C)
 # * cellstokeep.cvs (used to specify cells analysed in the rest of the paper)
-# * may2024.rds (used throughout the rest of the paper)
+# * may2024.rds (final dataset used throughout the rest of the paper)
 
 
 library(dittoSeq)
 library(Seurat)
 library(patchwork)
+library(clustree)
 
 set.seed(20022021)
 
@@ -108,6 +112,34 @@ DimPlot(postQC.sct, pt.size = 2, cols = UMAPcols)
 #Save integrated dataset pre-cell removal (please specify your own path)
 saveRDS(postQC.sct, "/path/../may2024_cellspreremoval.rds")
 
+#Clustree, use find all markers files to identify markers for clusters plotted in figure S2B------------------
+
+#Plot increased clustering over resolution 
+postQC.sct@active.assay <- "integrated" 
+postQC.sct <- FindClusters(postQC.sct, resolution = c(seq(0, to = 0.5, by=0.1)))
+postQC.sct <- FindClusters(postQC.sct, resolution = 1)
+DimPlot(postQC.sct, cols = UMAPcols)
+postQC.sct_clustree <- postQC.sct
+postQC.sct_clustree@meta.data <- postQC.sct_clustree@meta.data[, paste0("integrated_snn_res.", c(0, 0.1, 0.2, 0.3, 0.4, 0.5, 1))]
+clustree(postQC.sct_clustree, node_size_range = c(1, 35), node_text_size = 7, edge_width = 2) + scale_color_manual(values=UMAPcols)
+
+#Investigate cluster markers at resolution 0.2
+postQC.sct@active.assay <- "integrated" 
+postQC.sct <- FindClusters(postQC.sct, resolution = 0.2)
+DimPlot(postQC.sct, cols = UMAPcols)
+postQC.sct <- PrepSCTFindMarkers(postQC.sct)
+postQC.sct@active.assay <- "SCT" 
+postQC.sct_res0.2_markers <- FindAllMarkers(postQC.sct)
+
+#Investigate cluster markers at resolution 0.3
+postQC.sct@active.assay <- "integrated" 
+postQC.sct <- FindClusters(postQC.sct, resolution = 0.3)
+DimPlot(postQC.sct, cols = UMAPcols)
+postQC.sct <- PrepSCTFindMarkers(postQC.sct)
+postQC.sct@active.assay <- "SCT" 
+postQC.sct_res0.3_markers <- FindAllMarkers(postQC.sct)
+
+#Poor quality cell removal------------------
 #Remove cluster 0 and 3 due to enrichment of Ribosomal and chromosmal protein markers (see clustree section for decision to remove 0 and 3)
 CellsToKeep <- WhichCells(postQC.sct, ident = c("1", "2",  "4", "5", "6","7",  "8",  "9",  "10", "11", "12", "13", "14"))
 postQC.sct_Rplremoved <- subset(postQC.sct, cells= CellsToKeep)
@@ -117,7 +149,6 @@ DimPlot(postQC.sct_Rplremoved, pt.size = 2)
 write.csv(CellsToKeep, "/path/../CellsToKeep.csv")
 
 #Final Dataset Generation (generating may2024.rds)-----------------
-
 #Load in filtered feature matrix output from Cellranger, please specify your own path ("/path/../filtered_feature_bc_matrix/")
 SrcGFP_1.data <- Read10X(" ")
 SrcGFP_2.data <- Read10X(" ")
