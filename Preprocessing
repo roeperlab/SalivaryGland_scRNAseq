@@ -1,4 +1,5 @@
-# Processing of data generated through cellranger. Start here to generate R objects used in the paper from the original cellranger outputs. If you would like to skip this step and load in the final dataset please use may2024.rds found in GEO database, accession number XXXXXXXX.
+# Processing of data generated through cellranger. Start here to generate R seurat object used in the paper from the original cellranger outputs. 
+# If you would like to skip this step and load in the final dataset please load in may2024.rds found in GEO database, accession number XXXXXXXX.
 
 # This code generatings the following files 
 # * may2024_cellspreremoval.rds file (plotted in figure S2) 
@@ -16,12 +17,12 @@ set.seed(20022021)
 UMAPcols <- dittoColors()
 featureplotcols <- c("#e0f3db", "#ccebc5", "#a8ddb5", "#4eb3d3", "#2b8cbe", "#0868ac", "#084081")
 
-#Preprocessing-----------------
-#Load in filtered feature matrix output from Cellranger ("/path/../filtered_feature_bc_matrix/")
+#Preprocessing (generating cells to keep file)-----------------
 
+#Load in filtered feature matrix output from Cellranger, please specify your own path ("/path/../filtered_feature_bc_matrix/")
 SrcGFP_1.data <- Read10X(" ")
 SrcGFP_2.data <- Read10X(" ")
-ArmYFP.data <- Read10X("/Volumes/Macintosh HD/Users/amay/Desktop/ThesisRevisions/Datasets/may_2023/ArmYFP/filtered_feature_bc_matrix/")
+ArmYFP.data <- Read10X(" ")
 
 #Generate Seurat Object for each batch and genotype 
 SrcGFP_1 <- CreateSeuratObject(SrcGFP_1.data)
@@ -104,13 +105,106 @@ postQC.sct <- FindNeighbors(postQC.sct, reduction = "pca", dims = 1:44)
 postQC.sct <- FindClusters(postQC.sct, resolution = 0.3)
 DimPlot(postQC.sct, pt.size = 2, cols = UMAPcols)
 
-#Save integrated dataset pre-cell removal 
-#saveRDS(postQC.sct, "/Volumes/Macintosh HD/Users/amay/Documents/Figure1A/may2023_cellspreremoval.rds")
+#Save integrated dataset pre-cell removal (please specify your own path)
+saveRDS(postQC.sct, "/path/../may2024_cellspreremoval.rds")
 
 #Remove cluster 0 and 3 due to enrichment of Ribosomal and chromosmal protein markers (see clustree section for decision to remove 0 and 3)
 CellsToKeep <- WhichCells(postQC.sct, ident = c("1", "2",  "4", "5", "6","7",  "8",  "9",  "10", "11", "12", "13", "14"))
 postQC.sct_Rplremoved <- subset(postQC.sct, cells= CellsToKeep)
 DimPlot(postQC.sct_Rplremoved, pt.size = 2)
 
-#Save cells to keep 
-#write.csv(CellsToKeep, "/Volumes/Macintosh HD/Users/amay/Documents/Figure1A/CellsToKeep.csv")
+#Save cells to keep (please specify your own path)
+write.csv(CellsToKeep, "/path/../CellsToKeep.csv")
+
+#Final Dataset Generation (generating may2024.rds)-----------------
+
+#Load in filtered feature matrix output from Cellranger, please specify your own path ("/path/../filtered_feature_bc_matrix/")
+SrcGFP_1.data <- Read10X(" ")
+SrcGFP_2.data <- Read10X(" ")
+ArmYFP.data <- Read10X(" ")
+
+#Generate Seurat Object for each batch and genotype 
+SrcGFP_1 <- CreateSeuratObject(SrcGFP_1.data)
+SrcGFP_2 <- CreateSeuratObject(SrcGFP_2.data)
+ArmYFP <- CreateSeuratObject(ArmYFP.data)
+
+#Add genotype information to metadata
+SrcGFP_1$geno <- "Salivary Gland"
+SrcGFP_2$geno <- "Salivary Gland"
+ArmYFP$geno <- "Epidermis"
+
+#Specify original identity
+SrcGFP_1$orig.ident <- "SrcGFP_1"
+SrcGFP_2$orig.ident <- "SrcGFP_2"
+ArmYFP$orig.ident <- "ArmYFP"
+
+#Generate a merged seurat object
+may2024 <- merge(SrcGFP_1, y = c(SrcGFP_2, ArmYFP), add.cell.ids = c("SrcGFP1", "SrcGFP2", "ArmYFP"))
+
+#Check for correct merging
+table(may2024$geno)
+table(may2024$orig.ident)
+
+#Add percentage mitochonrdial and ribosomal reads per cell to metadata
+may2024[["percent.mt"]] <- PercentageFeatureSet(may2024, pattern = "mt:")
+may2024[["percent.ribo"]] <- PercentageFeatureSet(may2024, pattern = "^Rp[LS]")
+
+#Plot Genes, counts, mitochonrdial and ribosomal reads
+VlnPlot(may2024, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo"), split.by = "orig.ident" , ncol = 4,group.by = "orig.ident") 
+
+#Plot violin plots individually with upcoming quality control limits
+p1 <- VlnPlot(may2024, features = c("nFeature_RNA"), split.by = "orig.ident", group.by = "orig.ident") + geom_hline(yintercept = 2500, color="red", linetype="dashed") + theme(legend.position = 'none') 
+p2 <- VlnPlot(may2024, features = c("nCount_RNA"), split.by = "orig.ident", group.by = "orig.ident") + geom_hline(yintercept = 10000, color="red", linetype="dashed") + theme(legend.position = 'none') 
+p3 <- VlnPlot(may2024, features = c("percent.mt"), split.by = "orig.ident", group.by = "orig.ident") + geom_hline(yintercept = 10, color="red", linetype="dashed") + theme(legend.position = 'none') 
+p4 <- VlnPlot(may2024, features = c("percent.ribo"), split.by = "orig.ident", group.by = "orig.ident")
+
+wrap_plots(p1, p2, p3,p4, ncol = 4)
+
+#Subset dataset with quality control limits AND cells removed for low quality
+may2024 <- subset(may2024, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & nCount_RNA <10000 & percent.mt < 10)
+may2024 <- subset(may2024, cells = CellsToKeep)
+
+#Check for correct subsetting
+table(may2024$geno)
+table(may2024$orig.ident)
+
+#Plot by genotype 
+VlnPlot(may2024, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo"), split.by = "geno", group.by = "geno", ncol = 4) + theme(legend.position = "none")
+
+#Plot by batch 
+VlnPlot(may2024, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo"), split.by = "orig.ident", group.by = "orig.ident" , ncol = 4)  + theme(legend.position = "none")
+
+##Integrate and normalize datasets
+may2024.list <- SplitObject(may2024, split.by = "orig.ident")
+may2024.list
+may2024.list <- lapply(X = may2024.list, FUN = SCTransform, vars.to.regress = c("percent.mt", "percent.ribo"))
+features <- SelectIntegrationFeatures(object.list = may2024.list, nfeatures = 3000)
+may2024.list <- PrepSCTIntegration(object.list = may2024.list, anchor.features = features)
+
+may2024.anchors <- FindIntegrationAnchors(object.list = may2024.list, normalization.method = "SCT", 
+                                         anchor.features = features)
+may2024 <- IntegrateData(anchorset = may2024.anchors, normalization.method = "SCT")
+
+#Run PCA
+may2024 <- RunPCA(may2024)
+
+#Estimate maximum and minimum dimensions
+pct <- may2024[["pca"]]@stdev / sum(may2024[["pca"]]@stdev) * 100
+cumu <- cumsum(pct)
+co1 <- which(cumu > 90 & pct < 5)[1]
+co2 <- sort(which((pct[1:length(pct) - 1] - pct[2:length(pct)]) > 0.1), decreasing = T)[1] + 1
+pcs <- min(co1, co2)
+pcs
+
+#Plot dimentions 1 to 11 for UMAP it is the lowest bound of dimensions
+may2024 <- RunUMAP(may2024, reduction = "pca", dims = 1:11)
+DimPlot(may2024, reduction = "umap", group.by = "orig.ident")
+may2024 <- FindNeighbors(may2024, reduction = "pca", dims = 1:11)
+may2024 <- FindClusters(may2024, resolution = 0.17)
+DimPlot(may2024, pt.size = 2)
+
+#Save final integrated dataset (please specify your own path)
+saveRDS(may2024, "/path/../may2024.rds")
+
+#Loadpoint
+may2024 <- readRDS("/path/../may2024.rds")
