@@ -1,0 +1,116 @@
+# Processing of data generated through cellranger. Start here to generate R objects used in the paper from the original cellranger outputs. If you would like to skip this step and load in the final dataset please use may2024.rds found in GEO database, accession number XXXXXXXX.
+
+# This code generatings the following files 
+# * may2024_cellspreremoval.rds file (plotted in figure S2) 
+# * cellstokeep.cvs (used to specify cells analysed in the rest of the paper)
+# * may2024.rds (used throughout the rest of the paper)
+
+
+library(dittoSeq)
+library(Seurat)
+library(patchwork)
+
+set.seed(20022021)
+
+#Aesthetic-----------------
+UMAPcols <- dittoColors()
+featureplotcols <- c("#e0f3db", "#ccebc5", "#a8ddb5", "#4eb3d3", "#2b8cbe", "#0868ac", "#084081")
+
+#Preprocessing-----------------
+#Load in filtered feature matrix output from Cellranger ("/path/../filtered_feature_bc_matrix/")
+
+SrcGFP_1.data <- Read10X(" ")
+SrcGFP_2.data <- Read10X(" ")
+ArmYFP.data <- Read10X("/Volumes/Macintosh HD/Users/amay/Desktop/ThesisRevisions/Datasets/may_2023/ArmYFP/filtered_feature_bc_matrix/")
+
+#Generate Seurat Object for each batch and genotype 
+SrcGFP_1 <- CreateSeuratObject(SrcGFP_1.data)
+SrcGFP_2 <- CreateSeuratObject(SrcGFP_2.data)
+ArmYFP <- CreateSeuratObject(ArmYFP.data)
+
+#Add genotype information to metadata
+SrcGFP_1$geno <- "Salivary Gland"
+SrcGFP_2$geno <- "Salivary Gland"
+ArmYFP$geno <- "Epidermis"
+
+#Specify original identity
+SrcGFP_1$orig.ident <- "SrcGFP_1"
+SrcGFP_2$orig.ident <- "SrcGFP_2"
+ArmYFP$orig.ident <- "ArmYFP"
+
+#Generate a merged seurat object
+preQCmerge <- merge(SrcGFP_1, y = c(SrcGFP_2, ArmYFP), add.cell.ids = c("SrcGFP1", "SrcGFP2", "ArmYFP"))
+
+#Check for correct merging
+table(preQCmerge$geno)
+table(preQCmerge$orig.ident)
+
+#Add percentage mitochonrdial and ribosomal reads per cell to metadata
+preQCmerge[["percent.mt"]] <- PercentageFeatureSet(preQCmerge, pattern = "mt:")
+preQCmerge[["percent.ribo"]] <- PercentageFeatureSet(preQCmerge, pattern = "^Rp[LS]")
+
+#Plot Genes, counts, mitochonrdial and ribosomal reads
+VlnPlot(preQCmerge, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo"), split.by = "orig.ident" , ncol = 4,group.by = "orig.ident") 
+
+#Plot violin plots individually with upcoming quality control limits
+p1 <- VlnPlot(preQCmerge, features = c("nFeature_RNA"), split.by = "orig.ident", group.by = "orig.ident") + geom_hline(yintercept = 2500, color="red", linetype="dashed") + theme(legend.position = 'none') 
+p2 <- VlnPlot(preQCmerge, features = c("nCount_RNA"), split.by = "orig.ident", group.by = "orig.ident") + geom_hline(yintercept = 10000, color="red", linetype="dashed") + theme(legend.position = 'none') 
+p3 <- VlnPlot(preQCmerge, features = c("percent.mt"), split.by = "orig.ident", group.by = "orig.ident") + geom_hline(yintercept = 10, color="red", linetype="dashed") + theme(legend.position = 'none') 
+p4 <- VlnPlot(preQCmerge, features = c("percent.ribo"), split.by = "orig.ident", group.by = "orig.ident")
+
+wrap_plots(p1, p2, p3,p4, ncol = 4)
+
+#Subset dataset with quality control limits
+postQC <- subset(preQCmerge, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & nCount_RNA <10000 & percent.mt < 10)
+
+#Check for correct subsetting before vs after
+table(preQCmerge$geno)
+table(postQC$geno)
+table(preQCmerge$orig.ident)
+table(postQC$orig.ident)
+
+#Plot by genotype 
+VlnPlot(postQC, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo"), split.by = "geno", group.by = "geno", ncol = 4) + theme(legend.position = "none")
+
+#Plot by batch 
+VlnPlot(postQC, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo"), split.by = "orig.ident", group.by = "orig.ident" , ncol = 4)  + theme(legend.position = "none")
+
+##Integrate and normalize datasets
+postQC.list <- SplitObject(postQC, split.by = "orig.ident")
+postQC.list
+postQC.list <- lapply(X = postQC.list, FUN = SCTransform, vars.to.regress = c("percent.mt", "percent.ribo"))
+features <- SelectIntegrationFeatures(object.list = postQC.list, nfeatures = 3000)
+postQC.list <- PrepSCTIntegration(object.list = postQC.list, anchor.features = features)
+
+postQC.anchors <- FindIntegrationAnchors(object.list = postQC.list, normalization.method = "SCT", 
+                                         anchor.features = features)
+postQC.sct <- IntegrateData(anchorset = postQC.anchors, normalization.method = "SCT")
+
+##Run PCA
+postQC.sct <- RunPCA(postQC.sct)
+
+#Estimate maximum and minimum dimensions
+pct <- postQC.sct[["pca"]]@stdev / sum(postQC.sct[["pca"]]@stdev) * 100
+cumu <- cumsum(pct)
+co1 <- which(cumu > 90 & pct < 5)[1]
+co2 <- sort(which((pct[1:length(pct) - 1] - pct[2:length(pct)]) > 0.1), decreasing = T)[1] + 1
+pcs <- min(co1, co2)
+pcs
+
+#Plot dimentions 1 to 44 for UMAP it is the higher bound of dimentions
+postQC.sct <- RunUMAP(postQC.sct, reduction = "pca", dims = 1:44)
+DimPlot(postQC.sct, reduction = "umap", group.by = "orig.ident")
+postQC.sct <- FindNeighbors(postQC.sct, reduction = "pca", dims = 1:44)
+postQC.sct <- FindClusters(postQC.sct, resolution = 0.3)
+DimPlot(postQC.sct, pt.size = 2, cols = UMAPcols)
+
+#Save integrated dataset pre-cell removal 
+#saveRDS(postQC.sct, "/Volumes/Macintosh HD/Users/amay/Documents/Figure1A/may2023_cellspreremoval.rds")
+
+#Remove cluster 0 and 3 due to enrichment of Ribosomal and chromosmal protein markers (see clustree section for decision to remove 0 and 3)
+CellsToKeep <- WhichCells(postQC.sct, ident = c("1", "2",  "4", "5", "6","7",  "8",  "9",  "10", "11", "12", "13", "14"))
+postQC.sct_Rplremoved <- subset(postQC.sct, cells= CellsToKeep)
+DimPlot(postQC.sct_Rplremoved, pt.size = 2)
+
+#Save cells to keep 
+#write.csv(CellsToKeep, "/Volumes/Macintosh HD/Users/amay/Documents/Figure1A/CellsToKeep.csv")
