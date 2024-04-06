@@ -1,0 +1,85 @@
+# This file generates a table of marker genes for cells of salivary gland origin and epidermal origin
+# This table was then used for the literature reivew to identify novel markers plotted in figure 1E
+# It also plots the top genes and novel genes in volcano plots found in figure 1C and D
+
+#Load in the final dataset-----------------
+may2023 <- readRDS("/path/../may2023.rds")
+
+#Marker gene identification-----------------
+#Generate a new object for the analysis and find all markers between salivary gland and epidermal cells
+may2023_EPvsSG <- may2023
+may2023_EPvsSG <- SetIdent(may2023_EPvsSG, value = may2023_EPvsSG@meta.data$geno)
+may2023_EPvsSG <- PrepSCTFindMarkers(may2023_EPvsSG)
+may2023_EPvsSG@active.assay <- "SCT" 
+may2023_EPvsSG_markers <- FindAllMarkers(may2023_EPvsSG, logfc.threshold = 0)
+may2023_SG_markers <- subset(may2023_EPvsSG_markers, cluster == "Salivary Gland")
+
+#Save table of marker genes between the two cell types
+write.csv(may2023_EPvsSG_markers, "/path/../SalivaryGlandvsEP_Markers.csv")
+
+#Save table of salivary gland markers only (used for literature review)
+write.csv(may2023_SG_markers, "/path/../SalivaryGlandMarkers.csv")
+
+#Volcano plots-----------------
+
+#Load in literature review data
+SGMarkersVolcPlot <- read.csv("/Volumes/Macintosh HD/Users/amay/Desktop/PAPERFIGURES/LiteratureReview/SalivaryGlandMarkers_LITREVIEW.csv")
+
+#Plot volcano plot of top marker gene expression between salivary gland and epidermal cells (seen in figure 1C)
+labnames <- may2023_SG_markers$gene
+labels <- labnames[1:20]
+labels <- c("pip","nur","CG13159","ps","CrebA","Btk29A","Hsc70-3","wbl","PH4alphaSG2","Tpst","Bacc","CG5493","CG46385","RpS5b","sage" ,"HmgD","CG34190","ab","sano","Papss","Obp99a", "Ubx", "fkh", "GFP", "Scr")
+
+EnhancedVolcano(may2023_SG_markers, 
+                lab= labnames, 
+                x = "avg_log2FC", 
+                y = "p_val_adj", 
+                xlab = bquote(~Log[2]~ 'fold change'),
+                pCutoff = 10e-25,
+                FCcutoff = 0.25,
+                drawConnectors = T,
+                widthConnectors = 0.5,
+                labSize = 6,
+                ,
+                xlim = c(-1.2,2.6),
+                ylim = c(0,310),
+                colAlpha = 1,
+                maxoverlapsConnectors = 10,
+                selectLab = labels)
+
+#Plot volcano plot of novel marker gene expression between salivary gland and epidermal cells (seen in figure 1D)
+
+unknowngenes <- subset(SGMarkersVolcPlot, Valid == "Y" & New == "Y")
+unknowngenes <- unknowngenes$gene
+
+SGMarkersVolcPlot$CategoRY
+keyvals <- ifelse(SGMarkersVolcPlot$CategoRY == "Y", '#F8766D',
+                  ifelse(SGMarkersVolcPlot$CategoRY == "MP", '#7CAE00',
+                         ifelse(SGMarkersVolcPlot$CategoRY == "MA", '#00BFC4',
+                                ifelse(SGMarkersVolcPlot$CategoRY == "I", '#C77CFF',
+                                       ifelse(SGMarkersVolcPlot$CategoRY == "", '#333333', 'white')))))
+
+keyvals[is.na(keyvals)] <- 'white'
+names(keyvals)[keyvals == "#F8766D"] <- 'Not yet implicated'
+names(keyvals)[keyvals == '#7CAE00'] <- 'Mutant phenotype'
+names(keyvals)[keyvals == '#00BFC4'] <- 'Microarray'
+names(keyvals)[keyvals == '#C77CFF'] <- 'SG enriched in-situ'
+
+labnames <- SGMarkersVolcPlot$gene
+EnhancedVolcano(SGMarkersVolcPlot, 
+                lab= labnames, 
+                x = "avg_log2FC", 
+                y = "p_val_adj", 
+                xlab = bquote(~Log[2]~ 'fold change'),
+                pCutoff = 10e-25,
+                FCcutoff = 0.25,
+                drawConnectors = T,
+                widthConnectors = 0.5,
+                labSize = 6,
+                colCustom = keyvals,
+                xlim = c(-1.2,2.6),
+                ylim = c(0,310),
+                colAlpha = 1,
+                maxoverlapsConnectors = 100,
+                selectLab = unknowngenes,
+                pointSize = c(ifelse(SGMarkersVolcPlot$CategoRY== "Y",5, 2)))
