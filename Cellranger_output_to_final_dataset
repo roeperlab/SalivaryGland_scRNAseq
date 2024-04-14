@@ -24,9 +24,10 @@ featureplotcols <- c("#e0f3db", "#ccebc5", "#a8ddb5", "#4eb3d3", "#2b8cbe", "#08
 #Preprocessing (generating cells to keep file)-----------------
 
 #Load in filtered feature matrix output from Cellranger, please specify your own path ("/path/../filtered_feature_bc_matrix/")
-SrcGFP_1.data <- Read10X(" ")
-SrcGFP_2.data <- Read10X(" ")
-ArmYFP.data <- Read10X(" ")
+
+SrcGFP_1.data <- Read10X("/path/.../may_2024_raw/SrcGFP_4/filtered_feature_bc_matrix/")
+SrcGFP_2.data <- Read10X("/path/.../may_2024_raw/SrcGFP_3/filtered_feature_bc_matrix/")
+ArmYFP.data <- Read10X("/path/.../may_2024_raw/ArmYFP/filtered_feature_bc_matrix/")
 
 #Generate Seurat Object for each batch and genotype 
 SrcGFP_1 <- CreateSeuratObject(SrcGFP_1.data)
@@ -104,13 +105,13 @@ pcs
 
 #Plot dimentions 1 to 44 for UMAP it is the higher bound of dimentions
 postQC.sct <- RunUMAP(postQC.sct, reduction = "pca", dims = 1:44)
-DimPlot(postQC.sct, reduction = "umap", group.by = "orig.ident")
+DimPlot(postQC.sct, reduction = "umap", group.by = "orig.ident", pt.size = 2)
 postQC.sct <- FindNeighbors(postQC.sct, reduction = "pca", dims = 1:44)
 postQC.sct <- FindClusters(postQC.sct, resolution = 0.3)
 DimPlot(postQC.sct, pt.size = 2, cols = UMAPcols)
 
 #Save integrated dataset pre-cell removal (please specify your own path)
-saveRDS(postQC.sct, "/path/../may2024_cellspreremoval.rds")
+saveRDS(postQC.sct, "/path/.../may2024_cellspreremoval.rds")
 
 #Clustree, use find all markers files to identify markers for clusters plotted in figure S2B------------------
 
@@ -118,7 +119,7 @@ saveRDS(postQC.sct, "/path/../may2024_cellspreremoval.rds")
 postQC.sct@active.assay <- "integrated" 
 postQC.sct <- FindClusters(postQC.sct, resolution = c(seq(0, to = 0.5, by=0.1)))
 postQC.sct <- FindClusters(postQC.sct, resolution = 1)
-DimPlot(postQC.sct, cols = UMAPcols)
+DimPlot(postQC.sct, cols = UMAPcols, pt.size = 2)
 postQC.sct_clustree <- postQC.sct
 postQC.sct_clustree@meta.data <- postQC.sct_clustree@meta.data[, paste0("integrated_snn_res.", c(0, 0.1, 0.2, 0.3, 0.4, 0.5, 1))]
 clustree(postQC.sct_clustree, node_size_range = c(1, 35), node_text_size = 7, edge_width = 2) + scale_color_manual(values=UMAPcols)
@@ -126,7 +127,7 @@ clustree(postQC.sct_clustree, node_size_range = c(1, 35), node_text_size = 7, ed
 #Investigate cluster markers at resolution 0.2
 postQC.sct@active.assay <- "integrated" 
 postQC.sct <- FindClusters(postQC.sct, resolution = 0.2)
-DimPlot(postQC.sct, cols = UMAPcols)
+DimPlot(postQC.sct, cols = UMAPcols, pt.size = 2)
 postQC.sct <- PrepSCTFindMarkers(postQC.sct)
 postQC.sct@active.assay <- "SCT" 
 postQC.sct_res0.2_markers <- FindAllMarkers(postQC.sct)
@@ -134,25 +135,28 @@ postQC.sct_res0.2_markers <- FindAllMarkers(postQC.sct)
 #Investigate cluster markers at resolution 0.3
 postQC.sct@active.assay <- "integrated" 
 postQC.sct <- FindClusters(postQC.sct, resolution = 0.3)
-DimPlot(postQC.sct, cols = UMAPcols)
+DimPlot(postQC.sct, cols = UMAPcols, pt.size = 2)
 postQC.sct <- PrepSCTFindMarkers(postQC.sct)
 postQC.sct@active.assay <- "SCT" 
 postQC.sct_res0.3_markers <- FindAllMarkers(postQC.sct)
 
+write.csv(postQC.sct_res0.3_markers, "/path/.../may2024_cellspreremoval_markers_res0.3.cvs")
+
 #Poor quality cell removal------------------
-#Remove cluster 0 and 3 due to enrichment of Ribosomal and chromosmal protein markers (see clustree section for decision to remove 0 and 3)
+#Remove cluster 0 and 3 due to enrichment of Ribosomal and chromosmal protein markers (see clustree section for decision to remove 0 and 3), plotted in figure S2C
 CellsToKeep <- WhichCells(postQC.sct, ident = c("1", "2",  "4", "5", "6","7",  "8",  "9",  "10", "11", "12", "13", "14"))
 postQC.sct_Rplremoved <- subset(postQC.sct, cells= CellsToKeep)
-DimPlot(postQC.sct_Rplremoved, pt.size = 2)
+DimPlot(postQC.sct_Rplremoved, pt.size = 2, cols = UMAPcols)
 
 #Save cells to keep (please specify your own path)
-write.csv(CellsToKeep, "/path/../CellsToKeep.csv")
+write.csv(CellsToKeep, "/path/.../CellsToKeep.csv")
 
 #Final Dataset Generation (generating may2024.rds)-----------------
 #Load in filtered feature matrix output from Cellranger, please specify your own path ("/path/../filtered_feature_bc_matrix/")
-SrcGFP_1.data <- Read10X(" ")
-SrcGFP_2.data <- Read10X(" ")
-ArmYFP.data <- Read10X(" ")
+
+SrcGFP_1.data <- Read10X("/path/.../may_2024_raw/SrcGFP_4/filtered_feature_bc_matrix/")
+SrcGFP_2.data <- Read10X("/path/.../may_2024_raw/SrcGFP_3/filtered_feature_bc_matrix/")
+ArmYFP.data <- Read10X("/path/.../may_2024_raw/ArmYFP/filtered_feature_bc_matrix/")
 
 #Generate Seurat Object for each batch and genotype 
 SrcGFP_1 <- CreateSeuratObject(SrcGFP_1.data)
@@ -213,7 +217,7 @@ features <- SelectIntegrationFeatures(object.list = may2024.list, nfeatures = 30
 may2024.list <- PrepSCTIntegration(object.list = may2024.list, anchor.features = features)
 
 may2024.anchors <- FindIntegrationAnchors(object.list = may2024.list, normalization.method = "SCT", 
-                                         anchor.features = features)
+                                          anchor.features = features)
 may2024 <- IntegrateData(anchorset = may2024.anchors, normalization.method = "SCT")
 
 #Run PCA
@@ -229,13 +233,13 @@ pcs
 
 #Plot dimentions 1 to 11 for UMAP it is the lowest bound of dimensions
 may2024 <- RunUMAP(may2024, reduction = "pca", dims = 1:11)
-DimPlot(may2024, reduction = "umap", group.by = "orig.ident")
+DimPlot(may2024, reduction = "umap", group.by = "orig.ident", cols = UMAPcols, pt.size = 2)
 may2024 <- FindNeighbors(may2024, reduction = "pca", dims = 1:11)
 may2024 <- FindClusters(may2024, resolution = 0.17)
-DimPlot(may2024, pt.size = 2)
+DimPlot(may2024, pt.size = 2, cols = UMAPcols)
 
 #Save final integrated dataset (please specify your own path)
-saveRDS(may2024, "/path/../may2024.rds")
+saveRDS(may2024, "/path/.../may2024.rds")
 
-#Loadpoint
-may2024 <- readRDS("/path/../may2024.rds")
+#Loadpoint for future analysis
+may2024 <- readRDS("/path/.../may2024.rds")
