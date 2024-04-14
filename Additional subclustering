@@ -1,5 +1,12 @@
 * This file generates UMAP seen in Figure 3A, Dotplots 3B and volcano plots in 3C
 
+set.seed(20022021)
+
+#Aesthetic-----------------
+UMAPcols <- dittoColors()
+featureplotcols <- c("#e0f3db", "#ccebc5", "#a8ddb5", "#4eb3d3", "#2b8cbe", "#0868ac", "#084081")
+
+
 #Identify cells of interest "Salivary gland" is cluster 0 at resolution 0.17
 DimPlot(may2023, pt.size = 2, cols = UMAPcols)
 may2023_subset <- may2023
