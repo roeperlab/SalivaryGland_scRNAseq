@@ -2,6 +2,9 @@
 # This table was then used for the literature reivew to identify novel markers plotted in figure 1E
 # It also plots the top genes and novel genes in volcano plots found in figure 1C and D
 
+library(Seurat)
+library(EnhancedVolcano)
+
 #Load in the final dataset-----------------
 may2023 <- readRDS("/path/../may2023.rds")
 
@@ -23,7 +26,7 @@ write.csv(may2023_SG_markers, "/path/../SalivaryGlandMarkers.csv")
 #Volcano plots-----------------
 
 #Load in literature review data
-SGMarkersVolcPlot <- read.csv("/Volumes/Macintosh HD/Users/amay/Desktop/PAPERFIGURES/LiteratureReview/SalivaryGlandMarkers_LITREVIEW.csv")
+SGMarkersVolcPlot <- read.csv("/path/../SalivaryGlandMarkers_LITREVIEW.csv")
 
 #Plot volcano plot of top marker gene expression between salivary gland and epidermal cells (seen in figure 1C)
 labnames <- may2023_SG_markers$gene
