@@ -10,72 +10,72 @@ UMAPcols <- dittoColors()
 featureplotcols <- c("#e0f3db", "#ccebc5", "#a8ddb5", "#4eb3d3", "#2b8cbe", "#0868ac", "#084081")
 
 #Load in the final dataset-----------------
-may2023 <- readRDS("/Volumes/Macintosh HD/Users/amay/Documents/GitHubTest/may2024.rds")
+may2024 <- readRDS("/Volumes/Macintosh HD/Users/amay/Documents/GitHubTest/may2024.rds")
 
 #Additional subclustering-----------------
 #Identify cells of interest "Salivary gland" is cluster 0 at resolution 0.17
-DimPlot(may2023, pt.size = 2, cols = UMAPcols)
-may2023_subset <- may2023
-SalivaryGlandCells <- WhichCells(may2023_subset, idents = c("0", "1"))
+DimPlot(may2024, pt.size = 2, cols = UMAPcols)
+may2024_subset <- may2024
+SalivaryGlandCells <- WhichCells(may2024_subset, idents = c("0", "1"))
 
 #Increase clustering resolution to further subdivide cluster
-may2023_subset@active.assay <- "integrated" 
-may2023_subset <- FindClusters(may2023_subset, resolution = 0.3)
-DimPlot(may2023_subset, pt.size = 2, cols = UMAPcols, cells = SalivaryGlandCells) 
+may2024_subset@active.assay <- "integrated" 
+may2024_subset <- FindClusters(may2024_subset, resolution = 0.3)
+DimPlot(may2024_subset, pt.size = 2, cols = UMAPcols, cells = SalivaryGlandCells) 
 
-may2023_subset@active.assay <- "SCT" 
-may2023_subset<- PrepSCTFindMarkers(may2023_subset)
-may2023_subset_res0.3_markers <- FindAllMarkers(may2023_subset)
+may2024_subset@active.assay <- "SCT" 
+may2024_subset<- PrepSCTFindMarkers(may2024_subset)
+may2024_subset_res0.3_markers <- FindAllMarkers(may2024_subset)
 
 #Subset for specific clusters SG= (clusters 0, 1, 4, 6) 
-may2023_subset_res0.3_cluster0 <- subset(may2023_subset_res0.3_markers, cluster == "0")
-may2023_subset_res0.3_cluster1 <- subset(may2023_subset_res0.3_markers, cluster == "1")
-may2023_subset_res0.3_cluster4 <- subset(may2023_subset_res0.3_markers, cluster == "4")
-may2023_subset_res0.3_cluster6 <- subset(may2023_subset_res0.3_markers, cluster == "6")
+may2024_subset_res0.3_cluster0 <- subset(may2024_subset_res0.3_markers, cluster == "0")
+may2024_subset_res0.3_cluster1 <- subset(may2024_subset_res0.3_markers, cluster == "1")
+may2024_subset_res0.3_cluster4 <- subset(may2024_subset_res0.3_markers, cluster == "4")
+may2024_subset_res0.3_cluster6 <- subset(may2024_subset_res0.3_markers, cluster == "6")
 
 #Reorder clusters and replot for figure found in Figure 3A
-may2023_subset_reorder <- may2023_subset
+may2024_subset_reorder <- may2024_subset
 my_levels <- c(1,6,0,4,2,3,5,7,8,9) 
-factor(Idents(may2023_subset_reorder), levels= my_levels) 
-Idents(may2023_subset_reorder) <- factor(Idents(may2023_subset_reorder), levels= my_levels)
-DimPlot(may2023_subset_reorder, pt.size = 2, cols = UMAPcols, cells = SalivaryGlandCells) 
+factor(Idents(may2024_subset_reorder), levels= my_levels) 
+Idents(may2024_subset_reorder) <- factor(Idents(may2024_subset_reorder), levels= my_levels)
+DimPlot(may2024_subset_reorder, pt.size = 2, cols = UMAPcols, cells = SalivaryGlandCells) 
 
 #Dot plot for salivary gland subclusters-----------
-may2023_subset_reorder <- may2023_subset
+may2024_subset_reorder <- may2024_subset
 #Earliest highest on dotplot
 my_levels <- c(4,0,6,1,3,2,5,7,8,9) 
-factor(Idents(may2023_subset_reorder), levels= my_levels) 
-Idents(may2023_subset_reorder) <- factor(Idents(may2023_subset_reorder), levels= my_levels)
+factor(Idents(may2024_subset_reorder), levels= my_levels) 
+Idents(may2024_subset_reorder) <- factor(Idents(may2024_subset_reorder), levels= my_levels)
 
 #create ggplot object, this is the dotplot found in Figure 3B
 topgenes <- c("hth","fj","Egfr", "Tollo","grh","dve", "CG45263", "sog", "Zasp52", "trh", "cv-c", "pio", "Gmap", "CrebA","pip","Hsc70-3", "nur", "CG13159", "Calr", "PH4alphaSG1")
-may2023_subset_reorder@active.assay <- "SCT" 
-DotPlot(may2023_subset_reorder, features = topgenes, idents =c("1","6", "0", "4")) +
+may2024_subset_reorder@active.assay <- "SCT" 
+DotPlot(may2024_subset_reorder, features = topgenes, idents =c("1","6", "0", "4")) +
   geom_point(aes(size=pct.exp), shape = 21, colour="darkgrey", stroke=0.75) +
   scale_color_gradient2(low = "#FF00FF", mid = "white", high = "green") +
   guides(size=guide_legend(override.aes=list(shape=21, colour="black", fill="white"))) + RotatedAxis() 
 
 #Volcano plots for salivary gland subclusters-----------
 #Volcano plot
-may2023_subset@active.assay <- "integrated" 
-may2023_subset <- FindClusters(may2023_subset, resolution = 0.3)
-DimPlot(may2023_subset, cols = UMAPcols, pt.size = 2)
-may2023_subset@active.assay <- "SCT" 
-may2023_subset_res0.3_volcanoplotall <- FindAllMarkers(may2023_subset, logfc.threshold = 0)
-may2023_subset_res0.3_volcanoplot_cluster0 <- subset(may2023_subset_res0.3_volcanoplotall, cluster == "0")
-may2023_subset_res0.3_volcanoplot_cluster1 <- subset(may2023_subset_res0.3_volcanoplotall, cluster == "1")
-may2023_subset_res0.3_volcanoplot_cluster6 <- subset(may2023_subset_res0.3_volcanoplotall, cluster == "6")
-may2023_subset_res0.3_volcanoplot_cluster4 <- subset(may2023_subset_res0.3_volcanoplotall, cluster == "4")
+may2024_subset@active.assay <- "integrated" 
+may2024_subset <- FindClusters(may2024_subset, resolution = 0.3)
+DimPlot(may2024_subset, cols = UMAPcols, pt.size = 2)
+may2024_subset@active.assay <- "SCT" 
+may2024_subset_res0.3_volcanoplotall <- FindAllMarkers(may2024_subset, logfc.threshold = 0)
+may2024_subset_res0.3_volcanoplot_cluster0 <- subset(may2024_subset_res0.3_volcanoplotall, cluster == "0")
+may2024_subset_res0.3_volcanoplot_cluster1 <- subset(may2024_subset_res0.3_volcanoplotall, cluster == "1")
+may2024_subset_res0.3_volcanoplot_cluster6 <- subset(may2024_subset_res0.3_volcanoplotall, cluster == "6")
+may2024_subset_res0.3_volcanoplot_cluster4 <- subset(may2024_subset_res0.3_volcanoplotall, cluster == "4")
 
 
 
 #Cluster 1 (early cluster) plotted in Figure 3C
-labnames <- may2023_subset_res0.3_volcanoplot_cluster1$gene
+labnames <- may2024_subset_res0.3_volcanoplot_cluster1$gene
 labels <- labnames[1:10]
 labels <- c("hth", "ab","fj", "grh","CG8312", "Tollo", "dally","Egfr","nkd","disco-r", "ec")
 
 
-EnhancedVolcano(may2023_subset_res0.3_volcanoplot_cluster1, 
+EnhancedVolcano(may2024_subset_res0.3_volcanoplot_cluster1, 
                 lab= labnames, 
                 x = "avg_log2FC", 
                 y = "p_val_adj", 
@@ -102,9 +102,9 @@ EnhancedVolcano(may2023_subset_res0.3_volcanoplot_cluster1,
 
 
 #Cluster 6 (specified duct) plotted in Figure 3C
-labnames <- may2023_subset_res0.3_volcanoplot_cluster6$gene
+labnames <- may2024_subset_res0.3_volcanoplot_cluster6$gene
 labels <- labnames[1:10]
-EnhancedVolcano(may2023_subset_res0.3_volcanoplot_cluster6, 
+EnhancedVolcano(may2024_subset_res0.3_volcanoplot_cluster6, 
                 lab= labnames, 
                 x = "avg_log2FC", 
                 y = "p_val_adj", 
@@ -130,8 +130,8 @@ EnhancedVolcano(may2023_subset_res0.3_volcanoplot_cluster6,
 
 #Cluster 0 (specified secretory cluster) plotted in Figure 3C
 labels <- c("Gmap", "ps", "cv-c", "CrebA", "bnl", "pio", "pip", "Tpst", "fog", "Prosap", "CG6356", "fkh")
-labnames <- may2023_subset_res0.3_volcanoplot_cluster0$gene
-EnhancedVolcano(may2023_subset_res0.3_volcanoplot_cluster0, 
+labnames <- may2024_subset_res0.3_volcanoplot_cluster0$gene
+EnhancedVolcano(may2024_subset_res0.3_volcanoplot_cluster0, 
                 lab= labnames, 
                 x = "avg_log2FC", 
                 y = "p_val_adj", 
@@ -157,9 +157,9 @@ EnhancedVolcano(may2023_subset_res0.3_volcanoplot_cluster0,
                 col=c('grey', 'grey', 'grey', '#009E73'))
 
 #Cluster 4 (post specification) plotted in Figure 3C
-labnames <- may2023_subset_res0.3_volcanoplot_cluster4$gene
+labnames <- may2024_subset_res0.3_volcanoplot_cluster4$gene
 labels <- labnames[1:10]
-EnhancedVolcano(may2023_subset_res0.3_volcanoplot_cluster4, 
+EnhancedVolcano(may2024_subset_res0.3_volcanoplot_cluster4, 
                 lab= labnames, 
                 x = "avg_log2FC", 
                 y = "p_val_adj", 
@@ -183,5 +183,3 @@ EnhancedVolcano(may2023_subset_res0.3_volcanoplot_cluster4,
                 gridlines.major = T,
                 gridlines.minor = FALSE,
                 col=c('grey', 'grey', 'grey', '#F0E442'))
-
-
