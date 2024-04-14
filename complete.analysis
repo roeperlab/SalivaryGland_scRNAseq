@@ -1,3 +1,800 @@
 # Welcome to complete.analysis, this code should run you through all analysis covered in our paper. 
 
+library(dittoSeq)
+library(Seurat)
+library(patchwork)
+library(clustree)
+library(EnhancedVolcano)
+library(SingleCellExperiment)
+library(slingshot)
+library(monocle3)
+library(tradeSeq)
+library(pheatmap)
 
+set.seed(20022021)
+
+#Aesthetic-----------------
+UMAPcols <- dittoColors()
+featureplotcols <- c("#e0f3db", "#ccebc5", "#a8ddb5", "#4eb3d3", "#2b8cbe", "#0868ac", "#084081")
+
+#Preprocessing (generating cells to keep file)-----------------
+
+#Load in filtered feature matrix output from Cellranger, please specify your own path ("/path/../filtered_feature_bc_matrix/")
+
+SrcGFP_1.data <- Read10X("/path/.../may_2024_raw/SrcGFP_4/filtered_feature_bc_matrix/")
+SrcGFP_2.data <- Read10X("/path/.../may_2024_raw/SrcGFP_3/filtered_feature_bc_matrix/")
+ArmYFP.data <- Read10X("/path/.../may_2024_raw/ArmYFP/filtered_feature_bc_matrix/")
+
+#Generate Seurat Object for each batch and genotype 
+SrcGFP_1 <- CreateSeuratObject(SrcGFP_1.data)
+SrcGFP_2 <- CreateSeuratObject(SrcGFP_2.data)
+ArmYFP <- CreateSeuratObject(ArmYFP.data)
+
+#Add genotype information to metadata
+SrcGFP_1$geno <- "Salivary Gland"
+SrcGFP_2$geno <- "Salivary Gland"
+ArmYFP$geno <- "Epidermis"
+
+#Specify original identity
+SrcGFP_1$orig.ident <- "SrcGFP_1"
+SrcGFP_2$orig.ident <- "SrcGFP_2"
+ArmYFP$orig.ident <- "ArmYFP"
+
+#Generate a merged seurat object
+preQCmerge <- merge(SrcGFP_1, y = c(SrcGFP_2, ArmYFP), add.cell.ids = c("SrcGFP1", "SrcGFP2", "ArmYFP"))
+
+#Check for correct merging
+table(preQCmerge$geno)
+table(preQCmerge$orig.ident)
+
+#Add percentage mitochonrdial and ribosomal reads per cell to metadata
+preQCmerge[["percent.mt"]] <- PercentageFeatureSet(preQCmerge, pattern = "mt:")
+preQCmerge[["percent.ribo"]] <- PercentageFeatureSet(preQCmerge, pattern = "^Rp[LS]")
+
+#Plot Genes, counts, mitochonrdial and ribosomal reads
+VlnPlot(preQCmerge, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo"), split.by = "orig.ident" , ncol = 4,group.by = "orig.ident") 
+
+#Plot violin plots individually with upcoming quality control limits
+p1 <- VlnPlot(preQCmerge, features = c("nFeature_RNA"), split.by = "orig.ident", group.by = "orig.ident") + geom_hline(yintercept = 2500, color="red", linetype="dashed") + theme(legend.position = 'none') 
+p2 <- VlnPlot(preQCmerge, features = c("nCount_RNA"), split.by = "orig.ident", group.by = "orig.ident") + geom_hline(yintercept = 10000, color="red", linetype="dashed") + theme(legend.position = 'none') 
+p3 <- VlnPlot(preQCmerge, features = c("percent.mt"), split.by = "orig.ident", group.by = "orig.ident") + geom_hline(yintercept = 10, color="red", linetype="dashed") + theme(legend.position = 'none') 
+p4 <- VlnPlot(preQCmerge, features = c("percent.ribo"), split.by = "orig.ident", group.by = "orig.ident")
+
+wrap_plots(p1, p2, p3,p4, ncol = 4)
+
+#Subset dataset with quality control limits
+postQC <- subset(preQCmerge, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & nCount_RNA <10000 & percent.mt < 10)
+
+#Check for correct subsetting before vs after
+table(preQCmerge$geno)
+table(postQC$geno)
+table(preQCmerge$orig.ident)
+table(postQC$orig.ident)
+
+#Plot by genotype 
+VlnPlot(postQC, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo"), split.by = "geno", group.by = "geno", ncol = 4) + theme(legend.position = "none")
+
+#Plot by batch 
+VlnPlot(postQC, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo"), split.by = "orig.ident", group.by = "orig.ident" , ncol = 4)  + theme(legend.position = "none")
+
+##Integrate and normalize datasets
+postQC.list <- SplitObject(postQC, split.by = "orig.ident")
+postQC.list
+postQC.list <- lapply(X = postQC.list, FUN = SCTransform, vars.to.regress = c("percent.mt", "percent.ribo"))
+features <- SelectIntegrationFeatures(object.list = postQC.list, nfeatures = 3000)
+postQC.list <- PrepSCTIntegration(object.list = postQC.list, anchor.features = features)
+
+postQC.anchors <- FindIntegrationAnchors(object.list = postQC.list, normalization.method = "SCT", 
+                                         anchor.features = features)
+postQC.sct <- IntegrateData(anchorset = postQC.anchors, normalization.method = "SCT")
+
+##Run PCA
+postQC.sct <- RunPCA(postQC.sct)
+
+#Estimate maximum and minimum dimensions
+pct <- postQC.sct[["pca"]]@stdev / sum(postQC.sct[["pca"]]@stdev) * 100
+cumu <- cumsum(pct)
+co1 <- which(cumu > 90 & pct < 5)[1]
+co2 <- sort(which((pct[1:length(pct) - 1] - pct[2:length(pct)]) > 0.1), decreasing = T)[1] + 1
+pcs <- min(co1, co2)
+pcs
+
+#Plot dimentions 1 to 44 for UMAP it is the higher bound of dimentions
+postQC.sct <- RunUMAP(postQC.sct, reduction = "pca", dims = 1:44)
+DimPlot(postQC.sct, reduction = "umap", group.by = "orig.ident", pt.size = 2)
+postQC.sct <- FindNeighbors(postQC.sct, reduction = "pca", dims = 1:44)
+postQC.sct <- FindClusters(postQC.sct, resolution = 0.3)
+DimPlot(postQC.sct, pt.size = 2, cols = UMAPcols)
+
+#Save integrated dataset pre-cell removal (please specify your own path)
+saveRDS(postQC.sct, "/path/.../may2024_cellspreremoval.rds")
+
+#Clustree, use find all markers files to identify markers for clusters plotted in figure S2B------------------
+
+#Plot increased clustering over resolution 
+postQC.sct@active.assay <- "integrated" 
+postQC.sct <- FindClusters(postQC.sct, resolution = c(seq(0, to = 0.5, by=0.1)))
+postQC.sct <- FindClusters(postQC.sct, resolution = 1)
+DimPlot(postQC.sct, cols = UMAPcols, pt.size = 2)
+postQC.sct_clustree <- postQC.sct
+postQC.sct_clustree@meta.data <- postQC.sct_clustree@meta.data[, paste0("integrated_snn_res.", c(0, 0.1, 0.2, 0.3, 0.4, 0.5, 1))]
+clustree(postQC.sct_clustree, node_size_range = c(1, 35), node_text_size = 7, edge_width = 2) + scale_color_manual(values=UMAPcols)
+
+#Investigate cluster markers at resolution 0.2
+postQC.sct@active.assay <- "integrated" 
+postQC.sct <- FindClusters(postQC.sct, resolution = 0.2)
+DimPlot(postQC.sct, cols = UMAPcols, pt.size = 2)
+postQC.sct <- PrepSCTFindMarkers(postQC.sct)
+postQC.sct@active.assay <- "SCT" 
+postQC.sct_res0.2_markers <- FindAllMarkers(postQC.sct)
+
+#Investigate cluster markers at resolution 0.3
+postQC.sct@active.assay <- "integrated" 
+postQC.sct <- FindClusters(postQC.sct, resolution = 0.3)
+DimPlot(postQC.sct, cols = UMAPcols, pt.size = 2)
+postQC.sct <- PrepSCTFindMarkers(postQC.sct)
+postQC.sct@active.assay <- "SCT" 
+postQC.sct_res0.3_markers <- FindAllMarkers(postQC.sct)
+
+write.csv(postQC.sct_res0.3_markers, "/path/.../may2024_cellspreremoval_markers_res0.3.cvs")
+
+#Poor quality cell removal------------------
+#Remove cluster 0 and 3 due to enrichment of Ribosomal and chromosmal protein markers (see clustree section for decision to remove 0 and 3), plotted in figure S2C
+CellsToKeep <- WhichCells(postQC.sct, ident = c("1", "2",  "4", "5", "6","7",  "8",  "9",  "10", "11", "12", "13", "14"))
+postQC.sct_Rplremoved <- subset(postQC.sct, cells= CellsToKeep)
+DimPlot(postQC.sct_Rplremoved, pt.size = 2, cols = UMAPcols)
+
+#Save cells to keep (please specify your own path)
+write.csv(CellsToKeep, "/path/.../CellsToKeep.csv")
+
+#Final Dataset Generation (generating may2024.rds)-----------------
+#Load in filtered feature matrix output from Cellranger, please specify your own path ("/path/../filtered_feature_bc_matrix/")
+
+SrcGFP_1.data <- Read10X("/path/.../may_2024_raw/SrcGFP_4/filtered_feature_bc_matrix/")
+SrcGFP_2.data <- Read10X("/path/.../may_2024_raw/SrcGFP_3/filtered_feature_bc_matrix/")
+ArmYFP.data <- Read10X("/path/.../may_2024_raw/ArmYFP/filtered_feature_bc_matrix/")
+
+#Generate Seurat Object for each batch and genotype 
+SrcGFP_1 <- CreateSeuratObject(SrcGFP_1.data)
+SrcGFP_2 <- CreateSeuratObject(SrcGFP_2.data)
+ArmYFP <- CreateSeuratObject(ArmYFP.data)
+
+#Add genotype information to metadata
+SrcGFP_1$geno <- "Salivary Gland"
+SrcGFP_2$geno <- "Salivary Gland"
+ArmYFP$geno <- "Epidermis"
+
+#Specify original identity
+SrcGFP_1$orig.ident <- "SrcGFP_1"
+SrcGFP_2$orig.ident <- "SrcGFP_2"
+ArmYFP$orig.ident <- "ArmYFP"
+
+#Generate a merged seurat object
+may2024 <- merge(SrcGFP_1, y = c(SrcGFP_2, ArmYFP), add.cell.ids = c("SrcGFP1", "SrcGFP2", "ArmYFP"))
+
+#Check for correct merging
+table(may2024$geno)
+table(may2024$orig.ident)
+
+#Add percentage mitochonrdial and ribosomal reads per cell to metadata
+may2024[["percent.mt"]] <- PercentageFeatureSet(may2024, pattern = "mt:")
+may2024[["percent.ribo"]] <- PercentageFeatureSet(may2024, pattern = "^Rp[LS]")
+
+#Plot Genes, counts, mitochonrdial and ribosomal reads
+VlnPlot(may2024, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo"), split.by = "orig.ident" , ncol = 4,group.by = "orig.ident") 
+
+#Plot violin plots individually with upcoming quality control limits
+p1 <- VlnPlot(may2024, features = c("nFeature_RNA"), split.by = "orig.ident", group.by = "orig.ident") + geom_hline(yintercept = 2500, color="red", linetype="dashed") + theme(legend.position = 'none') 
+p2 <- VlnPlot(may2024, features = c("nCount_RNA"), split.by = "orig.ident", group.by = "orig.ident") + geom_hline(yintercept = 10000, color="red", linetype="dashed") + theme(legend.position = 'none') 
+p3 <- VlnPlot(may2024, features = c("percent.mt"), split.by = "orig.ident", group.by = "orig.ident") + geom_hline(yintercept = 10, color="red", linetype="dashed") + theme(legend.position = 'none') 
+p4 <- VlnPlot(may2024, features = c("percent.ribo"), split.by = "orig.ident", group.by = "orig.ident")
+
+wrap_plots(p1, p2, p3,p4, ncol = 4)
+
+#Subset dataset with quality control limits AND cells removed for low quality
+may2024 <- subset(may2024, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & nCount_RNA <10000 & percent.mt < 10)
+may2024 <- subset(may2024, cells = CellsToKeep)
+
+#Check for correct subsetting
+table(may2024$geno)
+table(may2024$orig.ident)
+
+#Plot by genotype 
+VlnPlot(may2024, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo"), split.by = "geno", group.by = "geno", ncol = 4) + theme(legend.position = "none")
+
+#Plot by batch 
+VlnPlot(may2024, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo"), split.by = "orig.ident", group.by = "orig.ident" , ncol = 4)  + theme(legend.position = "none")
+
+##Integrate and normalize datasets
+may2024.list <- SplitObject(may2024, split.by = "orig.ident")
+may2024.list
+may2024.list <- lapply(X = may2024.list, FUN = SCTransform, vars.to.regress = c("percent.mt", "percent.ribo"))
+features <- SelectIntegrationFeatures(object.list = may2024.list, nfeatures = 3000)
+may2024.list <- PrepSCTIntegration(object.list = may2024.list, anchor.features = features)
+
+may2024.anchors <- FindIntegrationAnchors(object.list = may2024.list, normalization.method = "SCT", 
+                                          anchor.features = features)
+may2024 <- IntegrateData(anchorset = may2024.anchors, normalization.method = "SCT")
+
+#Run PCA
+may2024 <- RunPCA(may2024)
+
+#Estimate maximum and minimum dimensions
+pct <- may2024[["pca"]]@stdev / sum(may2024[["pca"]]@stdev) * 100
+cumu <- cumsum(pct)
+co1 <- which(cumu > 90 & pct < 5)[1]
+co2 <- sort(which((pct[1:length(pct) - 1] - pct[2:length(pct)]) > 0.1), decreasing = T)[1] + 1
+pcs <- min(co1, co2)
+pcs
+
+#Plot dimentions 1 to 11 for UMAP it is the lowest bound of dimensions
+may2024 <- RunUMAP(may2024, reduction = "pca", dims = 1:11)
+DimPlot(may2024, reduction = "umap", group.by = "orig.ident", cols = UMAPcols, pt.size = 2)
+may2024 <- FindNeighbors(may2024, reduction = "pca", dims = 1:11)
+may2024 <- FindClusters(may2024, resolution = 0.17)
+DimPlot(may2024, pt.size = 2, cols = UMAPcols)
+
+#Save final integrated dataset (please specify your own path)
+saveRDS(may2024, "/path/.../may2024.rds")
+
+#Loadpoint for future analysis
+may2024 <- readRDS("/path/.../may2024.rds")
+
+#Cell type clusters--------------
+#Find markers for each cluster, generates table used find cell types labelled in figure 2A
+DimPlot(may2024, cols = UMAPcols, pt.size = 2)
+may2024@active.assay <- "integrated" 
+may2024 <- FindClusters(may2024, resolution = 0.17)
+may2024 <- PrepSCTFindMarkers(may2024)
+may2024@active.assay <- "SCT" 
+may2024_res0.17_markers <- FindAllMarkers(may2024)
+write.csv(may2024_res0.17_markers, "/Volumes/Macintosh HD/Users/amay/Documents/GitHubTest/may2024_markers.csv")
+
+#Plot top marker genes for each cluster, generates UMAP plots in figure 2B-G
+may2024@active.assay <- "integrated" 
+FeaturePlot(may2024, features = "chinmo", cols = featureplotcols, pt.size = 4, order = T)
+FeaturePlot(may2024, features = "Mef2", cols = featureplotcols, pt.size = 4, order = T)
+FeaturePlot(may2024, features = "pip", cols = featureplotcols, pt.size = 4, order = T)
+FeaturePlot(may2024, features = "Ppn", cols = featureplotcols, pt.size = 4, order = T)
+FeaturePlot(may2024, features = "grh", cols = featureplotcols, pt.size = 4, order = T)
+FeaturePlot(may2024, features = "E(spl)mgamma-HLH", cols = featureplotcols, pt.size = 4, order = T)
+
+#Marker gene identification-----------------
+#Generate a new object for the analysis and find all markers between salivary gland and epidermal cells
+may2024_EPvsSG <- may2024
+may2024_EPvsSG <- SetIdent(may2024_EPvsSG, value = may2024_EPvsSG@meta.data$geno)
+may2024_EPvsSG <- PrepSCTFindMarkers(may2024_EPvsSG)
+may2024_EPvsSG@active.assay <- "SCT" 
+may2024_EPvsSG_markers <- FindAllMarkers(may2024_EPvsSG, logfc.threshold = 0)
+may2024_SG_markers <- subset(may2024_EPvsSG_markers, cluster == "Salivary Gland")
+
+#Save table of marker genes between the two cell types
+write.csv(may2024_EPvsSG_markers, "/Volumes/Macintosh HD/Users/amay/Documents/GitHubTest/SalivaryGlandvsEP_Markers.csv")
+
+#Save table of salivary gland markers only (used for literature review)
+write.csv(may2024_SG_markers, "/Volumes/Macintosh HD/Users/amay/Documents/GitHubTest/SalivaryGlandMarkers.csv")
+
+#Volcano plots-----------------
+
+#Load in literature review data
+SGMarkersVolcPlot <- read.csv("/Volumes/Macintosh HD/Users/amay/Documents/GitHubTest/SalivaryGlandMarkers_LITREVIEW.csv")
+
+#Plot volcano plot of top marker gene expression between salivary gland and epidermal cells (seen in figure 1C)
+labnames <- may2024_SG_markers$gene
+labels <- c("pip","nur","CG13159","ps","CrebA","Btk29A","Hsc70-3","wbl","PH4alphaSG2","Tpst","Bacc","CG5493","CG46385","RpS5b","sage" ,"HmgD","CG34190","ab","sano","Papss","Obp99a", "Ubx", "fkh", "GFP", "Scr")
+
+EnhancedVolcano(may2024_SG_markers, 
+                lab= labnames, 
+                x = "avg_log2FC", 
+                y = "p_val_adj", 
+                xlab = bquote(~Log[2]~ 'fold change'),
+                pCutoff = 10e-25,
+                FCcutoff = 0.25,
+                drawConnectors = T,
+                widthConnectors = 0.5,
+                labSize = 6,
+                ,
+                xlim = c(-1.2,2.6),
+                ylim = c(0,310),
+                colAlpha = 1,
+                maxoverlapsConnectors = 10,
+                selectLab = labels)
+
+#Plot volcano plot of novel marker gene expression between salivary gland and epidermal cells (seen in figure 1D)
+
+unknowngenes <- subset(SGMarkersVolcPlot, Valid == "Y" & New == "Y")
+unknowngenes <- unknowngenes$gene
+
+SGMarkersVolcPlot$CategoRY
+keyvals <- ifelse(SGMarkersVolcPlot$CategoRY == "Y", '#F8766D',
+                  ifelse(SGMarkersVolcPlot$CategoRY == "MP", '#7CAE00',
+                         ifelse(SGMarkersVolcPlot$CategoRY == "MA", '#00BFC4',
+                                ifelse(SGMarkersVolcPlot$CategoRY == "I", '#C77CFF',
+                                       ifelse(SGMarkersVolcPlot$CategoRY == "", '#333333', 'white')))))
+
+keyvals[is.na(keyvals)] <- 'white'
+names(keyvals)[keyvals == "#F8766D"] <- 'Not yet implicated'
+names(keyvals)[keyvals == '#7CAE00'] <- 'Mutant phenotype'
+names(keyvals)[keyvals == '#00BFC4'] <- 'Microarray'
+names(keyvals)[keyvals == '#C77CFF'] <- 'SG enriched in-situ'
+
+labnames <- SGMarkersVolcPlot$gene
+EnhancedVolcano(SGMarkersVolcPlot, 
+                lab= labnames, 
+                x = "avg_log2FC", 
+                y = "p_val_adj", 
+                xlab = bquote(~Log[2]~ 'fold change'),
+                pCutoff = 10e-25,
+                FCcutoff = 0.25,
+                drawConnectors = T,
+                widthConnectors = 0.5,
+                labSize = 6,
+                colCustom = keyvals,
+                xlim = c(-1.2,2.6),
+                ylim = c(0,310),
+                colAlpha = 1,
+                maxoverlapsConnectors = 100,
+                selectLab = unknowngenes,
+                pointSize = c(ifelse(SGMarkersVolcPlot$CategoRY== "Y",5, 2)))
+
+#Additional subclustering-----------------
+#Identify cells of interest "Salivary gland" is cluster 0 at resolution 0.17
+DimPlot(may2024, pt.size = 2, cols = UMAPcols)
+may2024_subset <- may2024
+SalivaryGlandCells <- WhichCells(may2024_subset, idents = c("0", "1"))
+
+#Increase clustering resolution to further subdivide cluster
+may2024_subset@active.assay <- "integrated" 
+may2024_subset <- FindClusters(may2024_subset, resolution = 0.3)
+DimPlot(may2024_subset, pt.size = 2, cols = UMAPcols, cells = SalivaryGlandCells) 
+
+may2024_subset@active.assay <- "SCT" 
+may2024_subset<- PrepSCTFindMarkers(may2024_subset)
+may2024_subset_res0.3_markers <- FindAllMarkers(may2024_subset)
+
+#Subset for specific clusters SG= (clusters 0, 1, 4, 6) 
+may2024_subset_res0.3_cluster0 <- subset(may2024_subset_res0.3_markers, cluster == "0")
+may2024_subset_res0.3_cluster1 <- subset(may2024_subset_res0.3_markers, cluster == "1")
+may2024_subset_res0.3_cluster4 <- subset(may2024_subset_res0.3_markers, cluster == "4")
+may2024_subset_res0.3_cluster6 <- subset(may2024_subset_res0.3_markers, cluster == "6")
+
+#Reorder clusters and replot for figure found in Figure 3A
+may2024_subset_reorder <- may2024_subset
+my_levels <- c(1,6,0,4,2,3,5,7,8,9) 
+factor(Idents(may2024_subset_reorder), levels= my_levels) 
+Idents(may2024_subset_reorder) <- factor(Idents(may2024_subset_reorder), levels= my_levels)
+DimPlot(may2024_subset_reorder, pt.size = 2, cols = UMAPcols, cells = SalivaryGlandCells) 
+
+#Dot plot for salivary gland subclusters-----------
+may2024_subset_reorder <- may2024_subset
+#Earliest highest on dotplot
+my_levels <- c(4,0,6,1,3,2,5,7,8,9) 
+factor(Idents(may2024_subset_reorder), levels= my_levels) 
+Idents(may2024_subset_reorder) <- factor(Idents(may2024_subset_reorder), levels= my_levels)
+
+#create ggplot object, this is the dotplot found in Figure 3B
+topgenes <- c("hth","fj","Egfr", "Tollo","grh","dve", "CG45263", "sog", "Zasp52", "trh", "cv-c", "pio", "Gmap", "CrebA","pip","Hsc70-3", "nur", "CG13159", "Calr", "PH4alphaSG1")
+may2024_subset_reorder@active.assay <- "SCT" 
+DotPlot(may2024_subset_reorder, features = topgenes, idents =c("1","6", "0", "4")) +
+  geom_point(aes(size=pct.exp), shape = 21, colour="darkgrey", stroke=0.75) +
+  scale_color_gradient2(low = "#FF00FF", mid = "white", high = "green") +
+  guides(size=guide_legend(override.aes=list(shape=21, colour="black", fill="white"))) + RotatedAxis() 
+
+#Volcano plots for salivary gland subclusters-----------
+#Volcano plot
+may2024_subset@active.assay <- "integrated" 
+may2024_subset <- FindClusters(may2024_subset, resolution = 0.3)
+DimPlot(may2024_subset, cols = UMAPcols, pt.size = 2)
+may2024_subset@active.assay <- "SCT" 
+may2024_subset_res0.3_volcanoplotall <- FindAllMarkers(may2024_subset, logfc.threshold = 0)
+may2024_subset_res0.3_volcanoplot_cluster0 <- subset(may2024_subset_res0.3_volcanoplotall, cluster == "0")
+may2024_subset_res0.3_volcanoplot_cluster1 <- subset(may2024_subset_res0.3_volcanoplotall, cluster == "1")
+may2024_subset_res0.3_volcanoplot_cluster6 <- subset(may2024_subset_res0.3_volcanoplotall, cluster == "6")
+may2024_subset_res0.3_volcanoplot_cluster4 <- subset(may2024_subset_res0.3_volcanoplotall, cluster == "4")
+
+
+
+#Cluster 1 (early cluster) plotted in Figure 3C
+labnames <- may2024_subset_res0.3_volcanoplot_cluster1$gene
+labels <- labnames[1:10]
+labels <- c("hth", "ab","fj", "grh","CG8312", "Tollo", "dally","Egfr","nkd","disco-r", "ec")
+
+
+EnhancedVolcano(may2024_subset_res0.3_volcanoplot_cluster1, 
+                lab= labnames, 
+                x = "avg_log2FC", 
+                y = "p_val_adj", 
+                xlab = bquote(~Log[2]~ 'fold change'),
+                pCutoff = 10e-25,
+                FCcutoff = 0.25,
+                drawConnectors = T,
+                widthConnectors = 1,
+                labSize = 7,
+                pointSize = 4,
+                xlim = c(-1,1.6),
+                ylim = c(0,170),
+                colAlpha = 1,
+                maxoverlapsConnectors = 100,
+                selectLab = labels,
+                cutoffLineType = 'blank',
+                cutoffLineCol = 'black',
+                cutoffLineWidth = 0.8,
+                vline = 0,
+                boxedLabels = TRUE,
+                gridlines.major = T,
+                gridlines.minor = FALSE,
+                col=c('grey', 'grey', 'grey', '#E69F00'))
+
+
+#Cluster 6 (specified duct) plotted in Figure 3C
+labnames <- may2024_subset_res0.3_volcanoplot_cluster6$gene
+labels <- labnames[1:10]
+EnhancedVolcano(may2024_subset_res0.3_volcanoplot_cluster6, 
+                lab= labnames, 
+                x = "avg_log2FC", 
+                y = "p_val_adj", 
+                xlab = bquote(~Log[2]~ 'fold change'),
+                pCutoff = 10e-25,
+                FCcutoff = 0.25,
+                drawConnectors = T,
+                widthConnectors = 1,
+                labSize = 7,
+                xlim = c(-0.8,1.6),
+                ylim = c(0,180),
+                colAlpha = 1,
+                maxoverlapsConnectors = 100,
+                selectLab = labels,
+                cutoffLineType = 'blank',
+                cutoffLineCol = 'black',
+                cutoffLineWidth = 0.8,
+                vline = 0,
+                boxedLabels = TRUE,
+                gridlines.major = T,
+                gridlines.minor = FALSE,
+                col=c('grey', 'grey', 'grey', '#56B4E9'))
+
+#Cluster 0 (specified secretory cluster) plotted in Figure 3C
+labels <- c("Gmap", "ps", "cv-c", "CrebA", "bnl", "pio", "pip", "Tpst", "fog", "Prosap", "CG6356", "fkh")
+labnames <- may2024_subset_res0.3_volcanoplot_cluster0$gene
+EnhancedVolcano(may2024_subset_res0.3_volcanoplot_cluster0, 
+                lab= labnames, 
+                x = "avg_log2FC", 
+                y = "p_val_adj", 
+                xlab = bquote(~Log[2]~ 'fold change'),
+                pCutoff = 10e-25,
+                FCcutoff = 0.25,
+                drawConnectors = T,
+                widthConnectors = 1,
+                labSize = 7,
+                pointSize = 4,
+                xlim = c(-1.1,1.6),
+                ylim = c(0,200),
+                colAlpha = 1,
+                maxoverlapsConnectors = 100,
+                selectLab = labels,
+                cutoffLineType = 'blank',
+                cutoffLineCol = 'black',
+                cutoffLineWidth = 0.8,
+                vline = 0,
+                boxedLabels = TRUE,
+                gridlines.major = T,
+                gridlines.minor = FALSE,
+                col=c('grey', 'grey', 'grey', '#009E73'))
+
+#Cluster 4 (post specification) plotted in Figure 3C
+labnames <- may2024_subset_res0.3_volcanoplot_cluster4$gene
+labels <- labnames[1:10]
+EnhancedVolcano(may2024_subset_res0.3_volcanoplot_cluster4, 
+                lab= labnames, 
+                x = "avg_log2FC", 
+                y = "p_val_adj", 
+                xlab = bquote(~Log[2]~ 'fold change'),
+                pCutoff = 10e-25,
+                FCcutoff = 0.25,
+                drawConnectors = T,
+                widthConnectors = 1,
+                labSize = 7,
+                
+                xlim = c(-1.6,1.8),
+                ylim = c(0,60),
+                colAlpha = 1,
+                maxoverlapsConnectors = 100,
+                selectLab = labels,
+                cutoffLineType = 'blank',
+                cutoffLineCol = 'black',
+                cutoffLineWidth = 0.8,
+                vline = 0,
+                boxedLabels = TRUE,
+                gridlines.major = T,
+                gridlines.minor = FALSE,
+                col=c('grey', 'grey', 'grey', '#F0E442'))
+
+#Pseudotime------------------
+
+#Identify cells of interest "Salivary gland" is cluster 0 at resolution 0.17
+DimPlot(may2023, pt.size = 2, cols = UMAPcols)
+may2023_subset <- may2023
+SalivaryGlandCells <- WhichCells(may2023_subset, idents = c("0", "1"))
+
+#Increase clustering resolution to further subdivide cluster
+may2023_subset@active.assay <- "integrated" 
+may2023_subset <- FindClusters(may2023_subset, resolution = 0.3)
+DimPlot(may2023_subset, pt.size = 2, cols = UMAPcols, cells = SalivaryGlandCells) 
+
+#### Create a Monocle CDS Object
+# Project PC dimensions to whole data set
+my.so <- ProjectDim(may2023_subset, reduction = "pca")
+# Create an expression matrix
+expression_matrix <- my.so@assays$RNA@counts
+
+# Get cell metadata
+cell_metadata <- my.so@meta.data
+if (all.equal(colnames(expression_matrix), rownames(cell_metadata))) {
+  print(sprintf("Cell identifiers match"))
+} else {
+  print(sprintf("Cell identifier mismatch - %i cells in expression matrix, %i cells in metadata",
+                ncol(expression_matrix), nrow(cell_metadata)))
+  print("If the counts are equal, sort differences will throw this error")
+}
+
+# get gene annotations
+gene_annotation <- data.frame(gene_short_name = rownames(my.so@assays$RNA), row.names = rownames(my.so@assays$RNA))
+if (all.equal(rownames(expression_matrix), rownames(gene_annotation))) {
+  print(sprintf("Gene identifiers all match"))
+} else {
+  print(sprintf("Gene identifier mismatch - %i genes in expression matrix, %i gene in gene annotation",
+                nrow(expression_matrix), nrow(gene_annotation)))
+  print("If the counts are equal, sort differences will throw this error")
+}
+
+# Seurat-derived CDS
+my.cds <- new_cell_data_set(expression_matrix,
+                            cell_metadata = cell_metadata,
+                            gene_metadata = gene_annotation)
+
+# Transfer Seurat embeddings
+# Note that these may be calculated on the Integrated object, not the counts
+#   and thus will involve fewer genes
+reducedDim(my.cds, type = "PCA") <- my.so@reductions$pca@cell.embeddings 
+
+my.cds@reduce_dim_aux$prop_var_expl <- my.so@reductions$pca@stdev
+
+my.cds@reduce_dim_aux$prop_var_expl
+plot_pc_variance_explained(my.cds)
+
+# Transfer Seurat UMAP embeddings, will rec cluster cells not called yet error, learn graph will also have not been called yet
+my.cds@int_colData@listData$reducedDims$UMAP <- my.so@reductions$umap@cell.embeddings
+plot_cells(my.cds)
+
+# Copy cluster info from Seurat
+my.cds@clusters$UMAP_so$clusters <- my.so@meta.data$integrated_snn_res.0.45
+cds <- preprocess_cds(my.cds, num_dim = 100)
+my.cds <- cluster_cells(my.cds, reduction_method = "UMAP", resolution = 0.00038)
+
+# Fix from https://gitmemory.com/cole-trapnell-lab
+rownames(my.cds@principal_graph_aux$UMAP$dp_mst) <- NULL
+colnames(my.cds@int_colData@listData$reducedDims$UMAP) <- NULL
+
+DimPlot(may2023_subset, reduction = "umap")
+DimPlot(my.so, reduction = "umap")
+plot_cells(my.cds, color_cells_by = "partition", group_label_size = 3.5)
+plot_cells(my.cds, color_cells_by = "cluster", show_trajectory_graph = FALSE, group_label_size = 3.5)
+
+cds <- learn_graph(my.cds, use_partition = TRUE, verbose = FALSE)
+plot_cells(cds,
+           color_cells_by = "cluster",
+           label_groups_by_cluster=FALSE,
+           label_leaves=FALSE,
+           label_branch_points=FALSE)
+
+
+# Choose the first 6 nodes in the early cluster for ordering
+cds <- order_cells(cds)
+
+
+# Plot graph seen in figure 3E
+plot_cells(cds,
+           color_cells_by = "pseudotime",
+           group_cells_by = "cluster",
+           label_cell_groups = FALSE,
+           label_groups_by_cluster=FALSE,
+           label_leaves=FALSE,
+           label_branch_points=FALSE,
+           label_roots = FALSE,
+           trajectory_graph_color = "white", cell_size = 3, trajectory_graph_segment_size = 0, cell_stroke = 0,)
+
+
+
+
+#Pseudotimeheatmap--------------
+
+#Ensure correct subclustering
+may2023_subset@active.assay <- "integrated" 
+may2023_subset <- FindClusters(may2023_subset, resolution = 0.3)
+DimPlot(may2023_subset, pt.size = 2, cols = UMAPcols) 
+
+#Ensure generate heatmap object
+may2023_heatmap <- may2023_subset
+dimred <- may2023_heatmap@reductions$umap@cell.embeddings
+clustering <- may2023_heatmap$seurat_clusters
+counts <- as.matrix(may2023_heatmap@assays$RNA@counts)#[may2023_heatmap@assays$RNA@var.features, ]
+pal <- UMAPcols
+
+#Plot correct lineage for pseudotime heatmap
+par(mfrow = c(1, 2),bg = "white")
+plot(dimred[, 1:2], col = pal[clustering],cex = 0.5, pch = 16)
+for (i in levels(clustering)) {
+  text(mean(dimred[clustering == i, 1]), mean(dimred[clustering == i, 2]), labels = i, font = 2)
+}
+lineages <- getLineages(data = dimred,
+                        clusterLabels = clustering, dist.method = "mnn", omega = T)
+plot(dimred[, 1:2], col = pal[clustering], cex = 0.5, pch = 16)
+lines(SlingshotDataSet(lineages), lwd = 5, col = "red", linInd = "1")
+SlingshotDataSet(lineages)
+
+#replacecurves with lineages 
+lineages <- getCurves(lineages, approx_points = 150, thresh = 0.00001, stretch = 0, allow.breaks = T, shrink = 0.1, extend = "n")
+plot(dimred, col = pal[clustering], asp = 1, pch = 16, lwd = 1) + xlim(-5, 10) + ylim(-5, 4) 
+for (i in levels(clustering)) {
+  text(mean(dimred[clustering == i, 1]), mean(dimred[clustering == i, 2]), labels = i, font = 2)
+}
+plot(dimred[, 1:2], col = pal[clustering], cex = 0.5, pch = 16)
+lines(SlingshotDataSet(lineages), lwd = 5, col = "red", linInd = "1") 
+
+
+#Filter counts for differentially expressed genes across linage 1
+filt_counts <- counts[rowSums(counts > 5) > ncol(counts)/100, ]
+dim(filt_counts)
+c("Tollo",  "grh", "hth", "bnl", "nur", "Calr") %in% rownames(filt_counts)
+
+#Generate pseudotime values across linages
+pseudotime <- slingPseudotime(SlingshotDataSet(lineages), na = FALSE)
+cellWeights <- slingCurveWeights(SlingshotDataSet(lineages))
+sce <- fitGAM(counts = filt_counts, pseudotime = pseudotime, cellWeights = cellWeights,
+              nknots = 6, verbose = T)
+
+plotGeneCount(lineages, filt_counts, clusters = clustering, models = sce)
+rowData(sce)$assocRes <- associationTest(sce, lineages = TRUE)
+assocRes <- rowData(sce)$assocRes
+mockGenes <-  rownames(assocRes)
+
+which(p.adjust(assocRes$pvalue_1, "fdr") <= 0.05) 
+assocRes$waldStat_1
+
+#Smooth pseudotime values across linages and differental genes
+length(mockGenes)
+yhatSmooth <- predictSmooth(sce, gene = c("Tollo","Toll-6","hth", "grh", "fj","dve","CG45263","bnl", "sano","fkh","fog","Gmap", "Fili", "nur","ogre", "Calr"), nPoints = 1000, tidy = FALSE)
+
+# Plot heatmap seen in figure 3F
+heatSmooth <- pheatmap(t(scale(t(yhatSmooth[, 1:1000]))),
+                       cluster_cols = F,
+                       show_rownames = T, 
+                       show_colnames = T, cluster_rows = F)
+
+may2024_subset <- may2024
+may2024_subset@active.assay <- "integrated" 
+may2024_subset <- FindClusters(may2024_subset, resolution = 0.3)
+DimPlot(may2024_subset, cols = UMAPcols, pt.size = 2)
+
+may2024_subset@active.assay <- "SCT" 
+may2024_subset <- PrepSCTFindMarkers(may2024_subset)
+may2024_subset_res0.45_volcanoplot_cluster1vscluster1 <- FindMarkers(may2024_subset, logfc.threshold = 0, ident.1 = "1")
+may2024_subset_res0.45_volcanoplot_cluster1vscluster0 <- FindMarkers(may2024_subset, logfc.threshold = 0, ident.1 = "0", ident.2 = "1")
+may2024_subset_res0.45_volcanoplot_cluster1vscluster6 <- FindMarkers(may2024_subset, logfc.threshold = 0, ident.1 = "6", ident.2 = "1")
+may2024_subset_res0.45_volcanoplot_cluster1vscluster4 <- FindMarkers(may2024_subset, logfc.threshold = 0, ident.1 = "4", ident.2 = "1")
+
+
+#Cluster 1 (early cluster)
+labnames <- rownames(may2024_subset_res0.45_volcanoplot_cluster1vscluster1)
+labels <- c("hth","fj", "grh", "Tollo")
+
+EnhancedVolcano(may2024_subset_res0.45_volcanoplot_cluster1vscluster1, 
+                lab= labnames, 
+                x = "avg_log2FC", 
+                y = "p_val_adj", 
+                xlab = bquote(~Log[2]~ 'fold change'),
+                pCutoff = 1E-25,
+                FCcutoff = 0.25,
+                drawConnectors = T,
+                widthConnectors = 0.5,
+                labSize = 7,
+                pointSize = 5,
+                xlim = c(-1,1.6),
+                ylim = c(0,170),
+                colAlpha = 1,
+                maxoverlapsConnectors = 100,
+                selectLab = labels,
+                cutoffLineType = 'blank',
+                cutoffLineCol = 'black',
+                cutoffLineWidth = 0.8,
+                vline = 0,
+                boxedLabels = TRUE,
+                gridlines.major = T,
+                gridlines.minor = FALSE,
+                col=c('grey', 'grey', 'grey', '#E69F00'))
+
+
+#Cluster 6 (duct vs early)
+labels <- c("hth","fj", "grh", "Tollo")
+labnames <- rownames(may2024_subset_res0.45_volcanoplot_cluster1vscluster6)
+EnhancedVolcano(may2024_subset_res0.45_volcanoplot_cluster1vscluster6, 
+                lab= labnames, 
+                x = "avg_log2FC", 
+                y = "p_val_adj", 
+                xlab = bquote(~Log[2]~ 'fold change'),
+                pCutoff = 1E-25,
+                FCcutoff = 0.25,
+                drawConnectors = T,
+                widthConnectors = 0.5,
+                labSize = 7,
+                pointSize = 5,
+                xlim = c(-1.8,1.8),
+                ylim = c(0,90),
+                colAlpha = 1,
+                maxoverlapsConnectors = 100,
+                selectLab = labels,
+                cutoffLineType = 'blank',
+                cutoffLineCol = 'black',
+                cutoffLineWidth = 0.8,
+                vline = 0,
+                boxedLabels = TRUE,
+                gridlines.major = T,
+                gridlines.minor = FALSE,
+                col=c('grey', 'grey', 'grey', '#56B4E9'))
+
+
+#Cluster 0 (secretory vs early cluster)
+labnames <- rownames(may2024_subset_res0.45_volcanoplot_cluster1vscluster0)
+labels <- c("hth","fj", "grh", "Tollo")
+EnhancedVolcano(may2024_subset_res0.45_volcanoplot_cluster1vscluster0, 
+                lab= labnames, 
+                x = "avg_log2FC", 
+                y = "p_val_adj", 
+                xlab = bquote(~Log[2]~ 'fold change'),
+                pCutoff = 1E-25,
+                FCcutoff = 0.25,
+                drawConnectors = T,
+                widthConnectors = 0.5,
+                labSize = 7,
+                pointSize = 5,
+                xlim = c(-2,1.4),
+                ylim = c(0,180),
+                colAlpha = 1,
+                maxoverlapsConnectors = 100,
+                selectLab = labels,
+                cutoffLineType = 'blank',
+                cutoffLineCol = 'black',
+                cutoffLineWidth = 0.8,
+                vline = 0,
+                boxedLabels = TRUE,
+                gridlines.major = T,
+                gridlines.minor = FALSE,
+                col=c('grey', 'grey', 'grey', '#009E73'))
+
+#Cluster 4 (post specification vs early)
+labels <- c("hth","fj", "grh", "Tollo")
+labnames <- rownames(may2024_subset_res0.45_volcanoplot_cluster1vscluster4)
+EnhancedVolcano(may2024_subset_res0.45_volcanoplot_cluster1vscluster4, 
+                lab= labnames, 
+                x = "avg_log2FC", 
+                y = "p_val_adj", 
+                xlab = bquote(~Log[2]~ 'fold change'),
+                pCutoff = 1E-25,
+                FCcutoff = 0.25,
+                drawConnectors = T,
+                widthConnectors = 0.5,
+                labSize = 7,
+                pointSize = 5,
+                xlim = c(-2.7,2.5),
+                ylim = c(0,150),
+                colAlpha = 1,
+                maxoverlapsConnectors = 100,
+                selectLab = labels,
+                cutoffLineType = 'blank',
+                cutoffLineCol = 'black',
+                cutoffLineWidth = 0.8,
+                vline = 0,
+                boxedLabels = TRUE,
+                gridlines.major = T,
+                gridlines.minor = FALSE,
+                col=c('grey', 'grey', 'grey', '#F0E442'))
