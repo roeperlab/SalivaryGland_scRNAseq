@@ -6,7 +6,7 @@ library(Seurat)
 library(EnhancedVolcano)
 
 #Load in the final dataset-----------------
-may2023 <- readRDS("/path/../may2023.rds")
+may2023 <- readRDS("/Volumes/Macintosh HD/Users/amay/Documents/GitHubTest/may2024.rds")
 
 #Marker gene identification-----------------
 #Generate a new object for the analysis and find all markers between salivary gland and epidermal cells
@@ -18,19 +18,18 @@ may2023_EPvsSG_markers <- FindAllMarkers(may2023_EPvsSG, logfc.threshold = 0)
 may2023_SG_markers <- subset(may2023_EPvsSG_markers, cluster == "Salivary Gland")
 
 #Save table of marker genes between the two cell types
-write.csv(may2023_EPvsSG_markers, "/path/../SalivaryGlandvsEP_Markers.csv")
+write.csv(may2023_EPvsSG_markers, "/Volumes/Macintosh HD/Users/amay/Documents/GitHubTest/SalivaryGlandvsEP_Markers.csv")
 
 #Save table of salivary gland markers only (used for literature review)
-write.csv(may2023_SG_markers, "/path/../SalivaryGlandMarkers.csv")
+write.csv(may2023_SG_markers, "/Volumes/Macintosh HD/Users/amay/Documents/GitHubTest/SalivaryGlandMarkers.csv")
 
 #Volcano plots-----------------
 
 #Load in literature review data
-SGMarkersVolcPlot <- read.csv("/path/../SalivaryGlandMarkers_LITREVIEW.csv")
+SGMarkersVolcPlot <- read.csv("/Volumes/Macintosh HD/Users/amay/Documents/GitHubTest/SalivaryGlandMarkers_LITREVIEW.csv")
 
 #Plot volcano plot of top marker gene expression between salivary gland and epidermal cells (seen in figure 1C)
 labnames <- may2023_SG_markers$gene
-labels <- labnames[1:20]
 labels <- c("pip","nur","CG13159","ps","CrebA","Btk29A","Hsc70-3","wbl","PH4alphaSG2","Tpst","Bacc","CG5493","CG46385","RpS5b","sage" ,"HmgD","CG34190","ab","sano","Papss","Obp99a", "Ubx", "fkh", "GFP", "Scr")
 
 EnhancedVolcano(may2023_SG_markers, 
