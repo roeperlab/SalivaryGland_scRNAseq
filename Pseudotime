@@ -1,0 +1,180 @@
+# This file will generate all the necessary data to plot the pseudotime graph and heatmap in figure 3E and 3F
+
+library(dittoSeq)
+library(Seurat)
+library(SingleCellExperiment)
+library(slingshot)
+library(monocle3)
+library(tradeSeq)
+library(pheatmap)
+
+set.seed(20022021)
+
+#Aesthetic-----------------
+UMAPcols <- dittoColors()
+featureplotcols <- c("#e0f3db", "#ccebc5", "#a8ddb5", "#4eb3d3", "#2b8cbe", "#0868ac", "#084081")
+
+#Load in the final dataset-----------------
+may2023 <- readRDS("/Volumes/Macintosh HD/Users/amay/Documents/GitHubTest/may2024.rds")
+
+#Pseudotime------------------
+
+#Identify cells of interest "Salivary gland" is cluster 0 at resolution 0.17
+DimPlot(may2023, pt.size = 2, cols = UMAPcols)
+may2023_subset <- may2023
+SalivaryGlandCells <- WhichCells(may2023_subset, idents = c("0", "1"))
+
+#Increase clustering resolution to further subdivide cluster
+may2023_subset@active.assay <- "integrated" 
+may2023_subset <- FindClusters(may2023_subset, resolution = 0.3)
+DimPlot(may2023_subset, pt.size = 2, cols = UMAPcols, cells = SalivaryGlandCells) 
+
+#### Create a Monocle CDS Object
+# Project PC dimensions to whole data set
+my.so <- ProjectDim(may2023_subset, reduction = "pca")
+# Create an expression matrix
+expression_matrix <- my.so@assays$RNA@counts
+
+# Get cell metadata
+cell_metadata <- my.so@meta.data
+if (all.equal(colnames(expression_matrix), rownames(cell_metadata))) {
+  print(sprintf("Cell identifiers match"))
+} else {
+  print(sprintf("Cell identifier mismatch - %i cells in expression matrix, %i cells in metadata",
+                ncol(expression_matrix), nrow(cell_metadata)))
+  print("If the counts are equal, sort differences will throw this error")
+}
+
+# get gene annotations
+gene_annotation <- data.frame(gene_short_name = rownames(my.so@assays$RNA), row.names = rownames(my.so@assays$RNA))
+if (all.equal(rownames(expression_matrix), rownames(gene_annotation))) {
+  print(sprintf("Gene identifiers all match"))
+} else {
+  print(sprintf("Gene identifier mismatch - %i genes in expression matrix, %i gene in gene annotation",
+                nrow(expression_matrix), nrow(gene_annotation)))
+  print("If the counts are equal, sort differences will throw this error")
+}
+
+# Seurat-derived CDS
+my.cds <- new_cell_data_set(expression_matrix,
+                            cell_metadata = cell_metadata,
+                            gene_metadata = gene_annotation)
+
+# Transfer Seurat embeddings
+# Note that these may be calculated on the Integrated object, not the counts
+#   and thus will involve fewer genes
+reducedDim(my.cds, type = "PCA") <- my.so@reductions$pca@cell.embeddings 
+
+my.cds@reduce_dim_aux$prop_var_expl <- my.so@reductions$pca@stdev
+
+my.cds@reduce_dim_aux$prop_var_expl
+plot_pc_variance_explained(my.cds)
+
+# Transfer Seurat UMAP embeddings, will rec cluster cells not called yet error, learn graph will also have not been called yet
+my.cds@int_colData@listData$reducedDims$UMAP <- my.so@reductions$umap@cell.embeddings
+plot_cells(my.cds)
+
+# Copy cluster info from Seurat
+my.cds@clusters$UMAP_so$clusters <- my.so@meta.data$integrated_snn_res.0.45
+cds <- preprocess_cds(my.cds, num_dim = 100)
+my.cds <- cluster_cells(my.cds, reduction_method = "UMAP", resolution = 0.00038)
+
+# Fix from https://gitmemory.com/cole-trapnell-lab
+rownames(my.cds@principal_graph_aux$UMAP$dp_mst) <- NULL
+colnames(my.cds@int_colData@listData$reducedDims$UMAP) <- NULL
+
+DimPlot(may2023_subset, reduction = "umap")
+DimPlot(my.so, reduction = "umap")
+plot_cells(my.cds, color_cells_by = "partition", group_label_size = 3.5)
+plot_cells(my.cds, color_cells_by = "cluster", show_trajectory_graph = FALSE, group_label_size = 3.5)
+
+cds <- learn_graph(my.cds, use_partition = TRUE, verbose = FALSE)
+plot_cells(cds,
+           color_cells_by = "cluster",
+           label_groups_by_cluster=FALSE,
+           label_leaves=FALSE,
+           label_branch_points=FALSE)
+
+
+# Choose the first 6 nodes in the early cluster for ordering
+cds <- order_cells(cds)
+
+
+# Plot graph seen in figure 3E
+plot_cells(cds,
+           color_cells_by = "pseudotime",
+           group_cells_by = "cluster",
+           label_cell_groups = FALSE,
+           label_groups_by_cluster=FALSE,
+           label_leaves=FALSE,
+           label_branch_points=FALSE,
+           label_roots = FALSE,
+           trajectory_graph_color = "white", cell_size = 3, trajectory_graph_segment_size = 0, cell_stroke = 0,)
+
+
+
+
+#Pseudotimeheatmap--------------
+
+#Ensure correct subclustering
+may2023_subset@active.assay <- "integrated" 
+may2023_subset <- FindClusters(may2023_subset, resolution = 0.3)
+DimPlot(may2023_subset, pt.size = 2, cols = UMAPcols) 
+
+#Ensure generate heatmap object
+may2023_heatmap <- may2023_subset
+dimred <- may2023_heatmap@reductions$umap@cell.embeddings
+clustering <- may2023_heatmap$seurat_clusters
+counts <- as.matrix(may2023_heatmap@assays$RNA@counts)#[may2023_heatmap@assays$RNA@var.features, ]
+pal <- UMAPcols
+
+#Plot correct lineage for pseudotime heatmap
+par(mfrow = c(1, 2),bg = "white")
+plot(dimred[, 1:2], col = pal[clustering],cex = 0.5, pch = 16)
+for (i in levels(clustering)) {
+  text(mean(dimred[clustering == i, 1]), mean(dimred[clustering == i, 2]), labels = i, font = 2)
+}
+lineages <- getLineages(data = dimred,
+                        clusterLabels = clustering, dist.method = "mnn", omega = T)
+plot(dimred[, 1:2], col = pal[clustering], cex = 0.5, pch = 16)
+lines(SlingshotDataSet(lineages), lwd = 5, col = "red", linInd = "1")
+SlingshotDataSet(lineages)
+
+#replacecurves with lineages 
+lineages <- getCurves(lineages, approx_points = 150, thresh = 0.00001, stretch = 0, allow.breaks = T, shrink = 0.1, extend = "n")
+plot(dimred, col = pal[clustering], asp = 1, pch = 16, lwd = 1) + xlim(-5, 10) + ylim(-5, 4) 
+for (i in levels(clustering)) {
+  text(mean(dimred[clustering == i, 1]), mean(dimred[clustering == i, 2]), labels = i, font = 2)
+}
+plot(dimred[, 1:2], col = pal[clustering], cex = 0.5, pch = 16)
+lines(SlingshotDataSet(lineages), lwd = 5, col = "red", linInd = "1") 
+
+
+#Filter counts for differentially expressed genes across linage 1
+filt_counts <- counts[rowSums(counts > 5) > ncol(counts)/100, ]
+dim(filt_counts)
+c("Tollo",  "grh", "hth", "bnl", "nur", "Calr") %in% rownames(filt_counts)
+
+#Generate pseudotime values across linages
+pseudotime <- slingPseudotime(SlingshotDataSet(lineages), na = FALSE)
+cellWeights <- slingCurveWeights(SlingshotDataSet(lineages))
+sce <- fitGAM(counts = filt_counts, pseudotime = pseudotime, cellWeights = cellWeights,
+              nknots = 6, verbose = T)
+
+plotGeneCount(lineages, filt_counts, clusters = clustering, models = sce)
+rowData(sce)$assocRes <- associationTest(sce, lineages = TRUE)
+assocRes <- rowData(sce)$assocRes
+mockGenes <-  rownames(assocRes)
+
+which(p.adjust(assocRes$pvalue_1, "fdr") <= 0.05) 
+assocRes$waldStat_1
+
+#Smooth pseudotime values across linages and differental genes
+length(mockGenes)
+yhatSmooth <- predictSmooth(sce, gene = c("Tollo","Toll-6","hth", "grh", "fj","dve","CG45263","bnl", "sano","fkh","fog","Gmap", "Fili", "nur","ogre", "Calr"), nPoints = 1000, tidy = FALSE)
+
+# Plot heatmap seen in figure 3F
+heatSmooth <- pheatmap(t(scale(t(yhatSmooth[, 1:1000]))),
+                       cluster_cols = F,
+                       show_rownames = T, 
+                       show_colnames = T, cluster_rows = F)
