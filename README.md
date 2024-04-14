@@ -1,6 +1,6 @@
 Welcome to paperplanning hub for May et al 2024!
 
-* Final dataset can be found at GEO acession number XXXX - the final dataset used in the paper is file may2024.rds which can be used loaded into R and be used as the starting point for any of the analyses below.
+* Final dataset can be found at GEO acession number XXXX - the final dataset used in the paper is file may2024.rds which can be loaded into R and be used as the starting point for any of the analyses below.
 * Complete.analysis contains all analysis from loading data the raw data through all generated figures in the paper.
 
 If you are looking for only a specific analysis/figure please see a breakdown of the files below:
