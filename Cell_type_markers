@@ -5,6 +5,8 @@ library(Seurat)
 
 set.seed(20022021)
 
+
+#Aesthetic-----------------
 UMAPcols <- dittoColors()
 featureplotcols <- c("#e0f3db", "#ccebc5", "#a8ddb5", "#4eb3d3", "#2b8cbe", "#0868ac", "#084081")
 
