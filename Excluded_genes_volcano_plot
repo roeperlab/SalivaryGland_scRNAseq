@@ -1,0 +1,142 @@
+library(dittoSeq)
+library(Seurat)
+
+set.seed(20022021)
+
+#Aesthetic-----------------
+UMAPcols <- dittoColors()
+featureplotcols <- c("#e0f3db", "#ccebc5", "#a8ddb5", "#4eb3d3", "#2b8cbe", "#0868ac", "#084081")
+
+#Load in the final dataset-----------------
+may2024 <- readRDS("/Volumes/Macintosh HD/Users/amay/Documents/GitHubTest/may2024.rds")
+
+may2024_subset <- may2024
+may2024_subset@active.assay <- "integrated" 
+may2024_subset <- FindClusters(may2024_subset, resolution = 0.3)
+DimPlot(may2024_subset, cols = UMAPcols, pt.size = 2)
+
+may2024_subset@active.assay <- "SCT" 
+may2024_subset <- PrepSCTFindMarkers(may2024_subset)
+may2024_subset_res0.45_volcanoplot_cluster1vscluster1 <- FindMarkers(may2024_subset, logfc.threshold = 0, ident.1 = "1")
+may2024_subset_res0.45_volcanoplot_cluster1vscluster0 <- FindMarkers(may2024_subset, logfc.threshold = 0, ident.1 = "0", ident.2 = "1")
+may2024_subset_res0.45_volcanoplot_cluster1vscluster6 <- FindMarkers(may2024_subset, logfc.threshold = 0, ident.1 = "6", ident.2 = "1")
+may2024_subset_res0.45_volcanoplot_cluster1vscluster4 <- FindMarkers(may2024_subset, logfc.threshold = 0, ident.1 = "4", ident.2 = "1")
+
+
+#Cluster 1 (early cluster)
+labnames <- rownames(may2024_subset_res0.45_volcanoplot_cluster1vscluster1)
+labels <- c("hth","fj", "grh", "Tollo")
+
+EnhancedVolcano(may2024_subset_res0.45_volcanoplot_cluster1vscluster1, 
+                lab= labnames, 
+                x = "avg_log2FC", 
+                y = "p_val_adj", 
+                xlab = bquote(~Log[2]~ 'fold change'),
+                pCutoff = 1E-25,
+                FCcutoff = 0.25,
+                drawConnectors = T,
+                widthConnectors = 0.5,
+                labSize = 7,
+                pointSize = 5,
+                xlim = c(-1,1.6),
+                ylim = c(0,170),
+                colAlpha = 1,
+                maxoverlapsConnectors = 100,
+                selectLab = labels,
+                cutoffLineType = 'blank',
+                cutoffLineCol = 'black',
+                cutoffLineWidth = 0.8,
+                vline = 0,
+                boxedLabels = TRUE,
+                gridlines.major = T,
+                gridlines.minor = FALSE,
+                col=c('grey', 'grey', 'grey', '#E69F00'))
+
+
+#Cluster 6 (duct vs early)
+labels <- c("hth","fj", "grh", "Tollo")
+labnames <- rownames(may2024_subset_res0.45_volcanoplot_cluster1vscluster6)
+EnhancedVolcano(may2024_subset_res0.45_volcanoplot_cluster1vscluster6, 
+                lab= labnames, 
+                x = "avg_log2FC", 
+                y = "p_val_adj", 
+                xlab = bquote(~Log[2]~ 'fold change'),
+                pCutoff = 1E-25,
+                FCcutoff = 0.25,
+                drawConnectors = T,
+                widthConnectors = 0.5,
+                labSize = 7,
+                pointSize = 5,
+                xlim = c(-1.8,1.8),
+                ylim = c(0,90),
+                colAlpha = 1,
+                maxoverlapsConnectors = 100,
+                selectLab = labels,
+                cutoffLineType = 'blank',
+                cutoffLineCol = 'black',
+                cutoffLineWidth = 0.8,
+                vline = 0,
+                boxedLabels = TRUE,
+                gridlines.major = T,
+                gridlines.minor = FALSE,
+                col=c('grey', 'grey', 'grey', '#56B4E9'))
+
+
+#Cluster 0 (secretory vs early cluster)
+labnames <- rownames(may2024_subset_res0.45_volcanoplot_cluster1vscluster0)
+labels <- c("hth","fj", "grh", "Tollo")
+EnhancedVolcano(may2024_subset_res0.45_volcanoplot_cluster1vscluster0, 
+                lab= labnames, 
+                x = "avg_log2FC", 
+                y = "p_val_adj", 
+                xlab = bquote(~Log[2]~ 'fold change'),
+                pCutoff = 1E-25,
+                FCcutoff = 0.25,
+                drawConnectors = T,
+                widthConnectors = 0.5,
+                labSize = 7,
+                pointSize = 5,
+                xlim = c(-2,1.4),
+                ylim = c(0,180),
+                colAlpha = 1,
+                maxoverlapsConnectors = 100,
+                selectLab = labels,
+                cutoffLineType = 'blank',
+                cutoffLineCol = 'black',
+                cutoffLineWidth = 0.8,
+                vline = 0,
+                boxedLabels = TRUE,
+                gridlines.major = T,
+                gridlines.minor = FALSE,
+                col=c('grey', 'grey', 'grey', '#009E73'))
+
+#Cluster 4 (post specification vs early)
+labels <- c("hth","fj", "grh", "Tollo")
+labnames <- rownames(may2024_subset_res0.45_volcanoplot_cluster1vscluster4)
+EnhancedVolcano(may2024_subset_res0.45_volcanoplot_cluster1vscluster4, 
+                lab= labnames, 
+                x = "avg_log2FC", 
+                y = "p_val_adj", 
+                xlab = bquote(~Log[2]~ 'fold change'),
+                pCutoff = 1E-25,
+                FCcutoff = 0.25,
+                drawConnectors = T,
+                widthConnectors = 0.5,
+                labSize = 7,
+                pointSize = 5,
+                xlim = c(-2.7,2.5),
+                ylim = c(0,150),
+                colAlpha = 1,
+                maxoverlapsConnectors = 100,
+                selectLab = labels,
+                cutoffLineType = 'blank',
+                cutoffLineCol = 'black',
+                cutoffLineWidth = 0.8,
+                vline = 0,
+                boxedLabels = TRUE,
+                gridlines.major = T,
+                gridlines.minor = FALSE,
+                col=c('grey', 'grey', 'grey', '#F0E442'))
+
+
+
