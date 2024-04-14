@@ -1,4 +1,4 @@
-* This file generates plots found in figure 2 and a table used to identify the cell types for each cluster at a resolution of 0.17
+# This file generates plots found in figure 2 and a table used to identify the cell types for each cluster at a resolution of 0.17
 
 library(dittoSeq)
 library(Seurat)
@@ -7,7 +7,6 @@ set.seed(20022021)
 
 UMAPcols <- dittoColors()
 featureplotcols <- c("#e0f3db", "#ccebc5", "#a8ddb5", "#4eb3d3", "#2b8cbe", "#0868ac", "#084081")
-
 
 #Load in the final dataset-----------------
 may2023 <- readRDS("/Volumes/Macintosh HD/Users/amay/Documents/GitHubTest/may2024.rds")
@@ -19,7 +18,6 @@ may2023 <- PrepSCTFindMarkers(may2023)
 may2023@active.assay <- "SCT" 
 may2023_res0.17_markers <- FindAllMarkers(may2023)
 write.csv(may2023_res0.17_markers, "/Volumes/Macintosh HD/Users/amay/Documents/GitHubTest/may2024_markers.csv")
-
 
 #Plot top marker genes for each cluster, generates UMAP plots in figure 2B-G
 may2023 <- FindClusters(may2023, resolution = 0.17)
