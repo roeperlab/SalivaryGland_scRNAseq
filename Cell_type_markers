@@ -1,0 +1,29 @@
+
+library(dittoSeq)
+library(Seurat)
+
+set.seed(20022021)
+
+UMAPcols <- dittoColors()
+featureplotcols <- c("#e0f3db", "#ccebc5", "#a8ddb5", "#4eb3d3", "#2b8cbe", "#0868ac", "#084081")
+
+
+#Cell type clusters--------------
+
+#Find markers for each cluster
+DimPlot(may2023, cols = UMAPcols, pt.size = 2)
+may2023 <- PrepSCTFindMarkers(may2023)
+may2023@active.assay <- "SCT" 
+may2023_res0.17_markers <- FindAllMarkers(may2023)
+#write.csv(may2023_res0.17_markers, "/Volumes/Macintosh HD/Users/amay/Desktop/PAPERFIGURES/AllCells_markers.csv")
+
+
+#Plot top marker genes for each cluster 
+may2023@active.assay <- "integrated" 
+FeaturePlot(may2023, features = "chinmo", cols = featureplotcols, pt.size = 4, order = T)
+FeaturePlot(may2023, features = "Mef2", cols = featureplotcols, pt.size = 4, order = T)
+FeaturePlot(may2023, features = "pip", cols = featureplotcols, pt.size = 4, order = T)
+FeaturePlot(may2023, features = "Ppn", cols = featureplotcols, pt.size = 4, order = T)
+FeaturePlot(may2023, features = "grh", cols = featureplotcols, pt.size = 4, order = T)
+FeaturePlot(may2023, features = "E(spl)mgamma-HLH", cols = featureplotcols, pt.size = 4, order = T)
+may2023 <- FindClusters(may2023, resolution = 0.17)
