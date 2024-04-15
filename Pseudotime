@@ -15,23 +15,23 @@ UMAPcols <- dittoColors()
 featureplotcols <- c("#e0f3db", "#ccebc5", "#a8ddb5", "#4eb3d3", "#2b8cbe", "#0868ac", "#084081")
 
 #Load in the final dataset-----------------
-may2023 <- readRDS("/Volumes/Macintosh HD/Users/amay/Documents/GitHubTest/may2024.rds")
+may2024 <- readRDS("/Volumes/Macintosh HD/Users/amay/Documents/GitHubTest/may2024.rds")
 
 #Pseudotime------------------
 
 #Identify cells of interest "Salivary gland" is cluster 0 at resolution 0.17
-DimPlot(may2023, pt.size = 2, cols = UMAPcols)
-may2023_subset <- may2023
-SalivaryGlandCells <- WhichCells(may2023_subset, idents = c("0", "1"))
+DimPlot(may2024, pt.size = 2, cols = UMAPcols)
+may2024_subset <- may2024
+SalivaryGlandCells <- WhichCells(may2024_subset, idents = c("0", "1"))
 
 #Increase clustering resolution to further subdivide cluster
-may2023_subset@active.assay <- "integrated" 
-may2023_subset <- FindClusters(may2023_subset, resolution = 0.3)
-DimPlot(may2023_subset, pt.size = 2, cols = UMAPcols, cells = SalivaryGlandCells) 
+may2024_subset@active.assay <- "integrated" 
+may2024_subset <- FindClusters(may2024_subset, resolution = 0.3)
+DimPlot(may2024_subset, pt.size = 2, cols = UMAPcols, cells = SalivaryGlandCells) 
 
 #### Create a Monocle CDS Object
 # Project PC dimensions to whole data set
-my.so <- ProjectDim(may2023_subset, reduction = "pca")
+my.so <- ProjectDim(may2024_subset, reduction = "pca")
 # Create an expression matrix
 expression_matrix <- my.so@assays$RNA@counts
 
@@ -83,7 +83,7 @@ my.cds <- cluster_cells(my.cds, reduction_method = "UMAP", resolution = 0.00038)
 rownames(my.cds@principal_graph_aux$UMAP$dp_mst) <- NULL
 colnames(my.cds@int_colData@listData$reducedDims$UMAP) <- NULL
 
-DimPlot(may2023_subset, reduction = "umap")
+DimPlot(may2024_subset, reduction = "umap")
 DimPlot(my.so, reduction = "umap")
 plot_cells(my.cds, color_cells_by = "partition", group_label_size = 3.5)
 plot_cells(my.cds, color_cells_by = "cluster", show_trajectory_graph = FALSE, group_label_size = 3.5)
@@ -117,15 +117,15 @@ plot_cells(cds,
 #Pseudotimeheatmap--------------
 
 #Ensure correct subclustering
-may2023_subset@active.assay <- "integrated" 
-may2023_subset <- FindClusters(may2023_subset, resolution = 0.3)
-DimPlot(may2023_subset, pt.size = 2, cols = UMAPcols) 
+may2024_subset@active.assay <- "integrated" 
+may2024_subset <- FindClusters(may2024_subset, resolution = 0.3)
+DimPlot(may2024_subset, pt.size = 2, cols = UMAPcols) 
 
 #Ensure generate heatmap object
-may2023_heatmap <- may2023_subset
-dimred <- may2023_heatmap@reductions$umap@cell.embeddings
-clustering <- may2023_heatmap$seurat_clusters
-counts <- as.matrix(may2023_heatmap@assays$RNA@counts)#[may2023_heatmap@assays$RNA@var.features, ]
+may2024_heatmap <- may2024_subset
+dimred <- may2024_heatmap@reductions$umap@cell.embeddings
+clustering <- may2024_heatmap$seurat_clusters
+counts <- as.matrix(may2024_heatmap@assays$RNA@counts)#[may2024_heatmap@assays$RNA@var.features, ]
 pal <- UMAPcols
 
 #Plot correct lineage for pseudotime heatmap
