@@ -19,11 +19,11 @@ featureplotcols <- c("#e0f3db", "#ccebc5", "#a8ddb5", "#4eb3d3", "#2b8cbe", "#08
 
 #Preprocessing (generating cells to keep file)-----------------
 
-#Load in filtered feature matrix output from Cellranger, please specify your own path ("/path/../filtered_feature_bc_matrix/")
+#Load in filtered feature matrix output from Cellranger, please specify your own path in ("/path/.../filtered_feature_bc_matrix/")
 
-SrcGFP_1.data <- Read10X("/path/.../may_2024_raw/SrcGFP_4/filtered_feature_bc_matrix/")
-SrcGFP_2.data <- Read10X("/path/.../may_2024_raw/SrcGFP_3/filtered_feature_bc_matrix/")
-ArmYFP.data <- Read10X("/path/.../may_2024_raw/ArmYFP/filtered_feature_bc_matrix/")
+SrcGFP_1.data <- Read10X("/path/.../may2024/may_2024_raw/SrcGFP_4/filtered_feature_bc_matrix/")
+SrcGFP_2.data <- Read10X("/path/.../may2024/may_2024_raw/SrcGFP_3/filtered_feature_bc_matrix/")
+ArmYFP.data <- Read10X("/path/../may2024/may_2024_raw/ArmYFP/filtered_feature_bc_matrix/")
 
 #Generate Seurat Object for each batch and genotype 
 SrcGFP_1 <- CreateSeuratObject(SrcGFP_1.data)
@@ -77,7 +77,7 @@ VlnPlot(postQC, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percen
 #Plot by batch 
 VlnPlot(postQC, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo"), split.by = "orig.ident", group.by = "orig.ident" , ncol = 4)  + theme(legend.position = "none")
 
-##Integrate and normalize datasets
+#Integrate and normalize datasets
 postQC.list <- SplitObject(postQC, split.by = "orig.ident")
 postQC.list
 postQC.list <- lapply(X = postQC.list, FUN = SCTransform, vars.to.regress = c("percent.mt", "percent.ribo"))
@@ -88,7 +88,7 @@ postQC.anchors <- FindIntegrationAnchors(object.list = postQC.list, normalizatio
                                          anchor.features = features)
 postQC.sct <- IntegrateData(anchorset = postQC.anchors, normalization.method = "SCT")
 
-##Run PCA
+#Run PCA
 postQC.sct <- RunPCA(postQC.sct)
 
 #Estimate maximum and minimum dimensions
@@ -205,7 +205,7 @@ VlnPlot(may2024, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "perce
 #Plot by batch 
 VlnPlot(may2024, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo"), split.by = "orig.ident", group.by = "orig.ident" , ncol = 4)  + theme(legend.position = "none")
 
-##Integrate and normalize datasets
+#Integrate and normalize datasets
 may2024.list <- SplitObject(may2024, split.by = "orig.ident")
 may2024.list
 may2024.list <- lapply(X = may2024.list, FUN = SCTransform, vars.to.regress = c("percent.mt", "percent.ribo"))
@@ -248,7 +248,7 @@ may2024 <- FindClusters(may2024, resolution = 0.17)
 may2024 <- PrepSCTFindMarkers(may2024)
 may2024@active.assay <- "SCT" 
 may2024_res0.17_markers <- FindAllMarkers(may2024)
-write.csv(may2024_res0.17_markers, "/Volumes/Macintosh HD/Users/amay/Documents/GitHubTest/may2024_markers.csv")
+write.csv(may2024_res0.17_markers, "/path/.../may2024_markers.csv")
 
 #Plot top marker genes for each cluster, generates UMAP plots in figure 2B-G
 may2024@active.assay <- "integrated" 
@@ -269,15 +269,15 @@ may2024_EPvsSG_markers <- FindAllMarkers(may2024_EPvsSG, logfc.threshold = 0)
 may2024_SG_markers <- subset(may2024_EPvsSG_markers, cluster == "Salivary Gland")
 
 #Save table of marker genes between the two cell types
-write.csv(may2024_EPvsSG_markers, "/Volumes/Macintosh HD/Users/amay/Documents/GitHubTest/SalivaryGlandvsEP_Markers.csv")
+write.csv(may2024_EPvsSG_markers, "/path/.../SalivaryGlandvsEP_Markers.csv")
 
 #Save table of salivary gland markers only (used for literature review)
-write.csv(may2024_SG_markers, "/Volumes/Macintosh HD/Users/amay/Documents/GitHubTest/SalivaryGlandMarkers.csv")
+write.csv(may2024_SG_markers, "/path/.../SalivaryGlandMarkers.csv")
 
 #Volcano plots-----------------
 
 #Load in literature review data
-SGMarkersVolcPlot <- read.csv("/Volumes/Macintosh HD/Users/amay/Documents/GitHubTest/SalivaryGlandMarkers_LITREVIEW.csv")
+SGMarkersVolcPlot <- read.csv("/path/.../may2024/SalivaryGlandMarkers_LITREVIEW.csv")
 
 #Plot volcano plot of top marker gene expression between salivary gland and epidermal cells (seen in figure 1C)
 labnames <- may2024_SG_markers$gene
@@ -509,21 +509,22 @@ EnhancedVolcano(may2024_subset_res0.3_volcanoplot_cluster4,
                 gridlines.minor = FALSE,
                 col=c('grey', 'grey', 'grey', '#F0E442'))
 
+
 #Pseudotime------------------
 
 #Identify cells of interest "Salivary gland" is cluster 0 at resolution 0.17
-DimPlot(may2023, pt.size = 2, cols = UMAPcols)
-may2023_subset <- may2023
-SalivaryGlandCells <- WhichCells(may2023_subset, idents = c("0", "1"))
+DimPlot(may2024, pt.size = 2, cols = UMAPcols)
+may2024_subset <- may2024
+SalivaryGlandCells <- WhichCells(may2024_subset, idents = c("0", "1"))
 
 #Increase clustering resolution to further subdivide cluster
-may2023_subset@active.assay <- "integrated" 
-may2023_subset <- FindClusters(may2023_subset, resolution = 0.3)
-DimPlot(may2023_subset, pt.size = 2, cols = UMAPcols, cells = SalivaryGlandCells) 
+may2024_subset@active.assay <- "integrated" 
+may2024_subset <- FindClusters(may2024_subset, resolution = 0.3)
+DimPlot(may2024_subset, pt.size = 2, cols = UMAPcols, cells = SalivaryGlandCells) 
 
 #### Create a Monocle CDS Object
 # Project PC dimensions to whole data set
-my.so <- ProjectDim(may2023_subset, reduction = "pca")
+my.so <- ProjectDim(may2024_subset, reduction = "pca")
 # Create an expression matrix
 expression_matrix <- my.so@assays$RNA@counts
 
@@ -575,7 +576,7 @@ my.cds <- cluster_cells(my.cds, reduction_method = "UMAP", resolution = 0.00038)
 rownames(my.cds@principal_graph_aux$UMAP$dp_mst) <- NULL
 colnames(my.cds@int_colData@listData$reducedDims$UMAP) <- NULL
 
-DimPlot(may2023_subset, reduction = "umap")
+DimPlot(may2024_subset, reduction = "umap")
 DimPlot(my.so, reduction = "umap")
 plot_cells(my.cds, color_cells_by = "partition", group_label_size = 3.5)
 plot_cells(my.cds, color_cells_by = "cluster", show_trajectory_graph = FALSE, group_label_size = 3.5)
@@ -609,15 +610,15 @@ plot_cells(cds,
 #Pseudotimeheatmap--------------
 
 #Ensure correct subclustering
-may2023_subset@active.assay <- "integrated" 
-may2023_subset <- FindClusters(may2023_subset, resolution = 0.3)
-DimPlot(may2023_subset, pt.size = 2, cols = UMAPcols) 
+may2024_subset@active.assay <- "integrated" 
+may2024_subset <- FindClusters(may2024_subset, resolution = 0.3)
+DimPlot(may2024_subset, pt.size = 2, cols = UMAPcols) 
 
 #Ensure generate heatmap object
-may2023_heatmap <- may2023_subset
-dimred <- may2023_heatmap@reductions$umap@cell.embeddings
-clustering <- may2023_heatmap$seurat_clusters
-counts <- as.matrix(may2023_heatmap@assays$RNA@counts)#[may2023_heatmap@assays$RNA@var.features, ]
+may2024_heatmap <- may2024_subset
+dimred <- may2024_heatmap@reductions$umap@cell.embeddings
+clustering <- may2024_heatmap$seurat_clusters
+counts <- as.matrix(may2024_heatmap@assays$RNA@counts)#[may2024_heatmap@assays$RNA@var.features, ]
 pal <- UMAPcols
 
 #Plot correct lineage for pseudotime heatmap
@@ -634,7 +635,7 @@ SlingshotDataSet(lineages)
 
 #replacecurves with lineages 
 lineages <- getCurves(lineages, approx_points = 150, thresh = 0.00001, stretch = 0, allow.breaks = T, shrink = 0.1, extend = "n")
-plot(dimred, col = pal[clustering], asp = 1, pch = 16, lwd = 1) + xlim(-5, 10) + ylim(-5, 4) 
+plot(dimred, col = pal[clustering], asp = 1, pch = 16, lwd = 1) 
 for (i in levels(clustering)) {
   text(mean(dimred[clustering == i, 1]), mean(dimred[clustering == i, 2]), labels = i, font = 2)
 }
@@ -670,131 +671,3 @@ heatSmooth <- pheatmap(t(scale(t(yhatSmooth[, 1:1000]))),
                        cluster_cols = F,
                        show_rownames = T, 
                        show_colnames = T, cluster_rows = F)
-
-may2024_subset <- may2024
-may2024_subset@active.assay <- "integrated" 
-may2024_subset <- FindClusters(may2024_subset, resolution = 0.3)
-DimPlot(may2024_subset, cols = UMAPcols, pt.size = 2)
-
-may2024_subset@active.assay <- "SCT" 
-may2024_subset <- PrepSCTFindMarkers(may2024_subset)
-may2024_subset_res0.45_volcanoplot_cluster1vscluster1 <- FindMarkers(may2024_subset, logfc.threshold = 0, ident.1 = "1")
-may2024_subset_res0.45_volcanoplot_cluster1vscluster0 <- FindMarkers(may2024_subset, logfc.threshold = 0, ident.1 = "0", ident.2 = "1")
-may2024_subset_res0.45_volcanoplot_cluster1vscluster6 <- FindMarkers(may2024_subset, logfc.threshold = 0, ident.1 = "6", ident.2 = "1")
-may2024_subset_res0.45_volcanoplot_cluster1vscluster4 <- FindMarkers(may2024_subset, logfc.threshold = 0, ident.1 = "4", ident.2 = "1")
-
-
-#Cluster 1 (early cluster)
-labnames <- rownames(may2024_subset_res0.45_volcanoplot_cluster1vscluster1)
-labels <- c("hth","fj", "grh", "Tollo")
-
-EnhancedVolcano(may2024_subset_res0.45_volcanoplot_cluster1vscluster1, 
-                lab= labnames, 
-                x = "avg_log2FC", 
-                y = "p_val_adj", 
-                xlab = bquote(~Log[2]~ 'fold change'),
-                pCutoff = 1E-25,
-                FCcutoff = 0.25,
-                drawConnectors = T,
-                widthConnectors = 0.5,
-                labSize = 7,
-                pointSize = 5,
-                xlim = c(-1,1.6),
-                ylim = c(0,170),
-                colAlpha = 1,
-                maxoverlapsConnectors = 100,
-                selectLab = labels,
-                cutoffLineType = 'blank',
-                cutoffLineCol = 'black',
-                cutoffLineWidth = 0.8,
-                vline = 0,
-                boxedLabels = TRUE,
-                gridlines.major = T,
-                gridlines.minor = FALSE,
-                col=c('grey', 'grey', 'grey', '#E69F00'))
-
-
-#Cluster 6 (duct vs early)
-labels <- c("hth","fj", "grh", "Tollo")
-labnames <- rownames(may2024_subset_res0.45_volcanoplot_cluster1vscluster6)
-EnhancedVolcano(may2024_subset_res0.45_volcanoplot_cluster1vscluster6, 
-                lab= labnames, 
-                x = "avg_log2FC", 
-                y = "p_val_adj", 
-                xlab = bquote(~Log[2]~ 'fold change'),
-                pCutoff = 1E-25,
-                FCcutoff = 0.25,
-                drawConnectors = T,
-                widthConnectors = 0.5,
-                labSize = 7,
-                pointSize = 5,
-                xlim = c(-1.8,1.8),
-                ylim = c(0,90),
-                colAlpha = 1,
-                maxoverlapsConnectors = 100,
-                selectLab = labels,
-                cutoffLineType = 'blank',
-                cutoffLineCol = 'black',
-                cutoffLineWidth = 0.8,
-                vline = 0,
-                boxedLabels = TRUE,
-                gridlines.major = T,
-                gridlines.minor = FALSE,
-                col=c('grey', 'grey', 'grey', '#56B4E9'))
-
-
-#Cluster 0 (secretory vs early cluster)
-labnames <- rownames(may2024_subset_res0.45_volcanoplot_cluster1vscluster0)
-labels <- c("hth","fj", "grh", "Tollo")
-EnhancedVolcano(may2024_subset_res0.45_volcanoplot_cluster1vscluster0, 
-                lab= labnames, 
-                x = "avg_log2FC", 
-                y = "p_val_adj", 
-                xlab = bquote(~Log[2]~ 'fold change'),
-                pCutoff = 1E-25,
-                FCcutoff = 0.25,
-                drawConnectors = T,
-                widthConnectors = 0.5,
-                labSize = 7,
-                pointSize = 5,
-                xlim = c(-2,1.4),
-                ylim = c(0,180),
-                colAlpha = 1,
-                maxoverlapsConnectors = 100,
-                selectLab = labels,
-                cutoffLineType = 'blank',
-                cutoffLineCol = 'black',
-                cutoffLineWidth = 0.8,
-                vline = 0,
-                boxedLabels = TRUE,
-                gridlines.major = T,
-                gridlines.minor = FALSE,
-                col=c('grey', 'grey', 'grey', '#009E73'))
-
-#Cluster 4 (post specification vs early)
-labels <- c("hth","fj", "grh", "Tollo")
-labnames <- rownames(may2024_subset_res0.45_volcanoplot_cluster1vscluster4)
-EnhancedVolcano(may2024_subset_res0.45_volcanoplot_cluster1vscluster4, 
-                lab= labnames, 
-                x = "avg_log2FC", 
-                y = "p_val_adj", 
-                xlab = bquote(~Log[2]~ 'fold change'),
-                pCutoff = 1E-25,
-                FCcutoff = 0.25,
-                drawConnectors = T,
-                widthConnectors = 0.5,
-                labSize = 7,
-                pointSize = 5,
-                xlim = c(-2.7,2.5),
-                ylim = c(0,150),
-                colAlpha = 1,
-                maxoverlapsConnectors = 100,
-                selectLab = labels,
-                cutoffLineType = 'blank',
-                cutoffLineCol = 'black',
-                cutoffLineWidth = 0.8,
-                vline = 0,
-                boxedLabels = TRUE,
-                gridlines.major = T,
-                gridlines.minor = FALSE,
-                col=c('grey', 'grey', 'grey', '#F0E442'))
