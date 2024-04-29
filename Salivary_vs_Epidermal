@@ -7,7 +7,7 @@ library(EnhancedVolcano)
 
 
 #Load in the final dataset-----------------
-may2024 <- readRDS("/Volumes/Macintosh HD/Users/amay/Documents/GitHubTest/may2024.rds")
+may2024 <- readRDS("/.../may2024.rds")
 
 #Marker gene identification-----------------
 #Generate a new object for the analysis and find all markers between salivary gland and epidermal cells
