@@ -178,3 +178,5 @@ heatSmooth <- pheatmap(t(scale(t(yhatSmooth[, 1:1000]))),
                        cluster_cols = F,
                        show_rownames = T, 
                        show_colnames = T, cluster_rows = F)
+
+
