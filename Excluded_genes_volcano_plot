@@ -138,7 +138,3 @@ EnhancedVolcano(may2024_subset_res0.45_volcanoplot_cluster1vscluster4,
                 gridlines.minor = FALSE,
                 col=c('grey', 'grey', 'grey', '#F0E442'))
 
-
-
-
-
