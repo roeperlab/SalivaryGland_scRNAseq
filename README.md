@@ -11,4 +11,4 @@ If you are looking for only a specific analysis/figure please see a breakdown of
 * Pseudotime: Figure 3E and F, load in may2024.rds apply subclustering rules and use monocle3 to plot pseudotime values, identfy genes differentially expressed across pseudotime
 * Excluded_genes_volcano_plot: Figure 4A and 4C, load in may2024.rds and plot the excluded genes across the different timed cluster points as well as the enhancer of split genes.
 
-Analysis performed by Annabel May (github.com/annabel-may)
+Analysis performed by Annabel May - https://github.com/annabel-may
