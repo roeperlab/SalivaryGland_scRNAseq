@@ -9,7 +9,6 @@
 # * cellstokeep.cvs (used to specify cells analysed in the rest of the paper)
 # * may2024.rds (final dataset used throughout the rest of the paper)
 
-
 library(dittoSeq)
 library(Seurat)
 library(patchwork)
