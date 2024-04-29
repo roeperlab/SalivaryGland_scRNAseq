@@ -21,8 +21,8 @@ featureplotcols <- c("#e0f3db", "#ccebc5", "#a8ddb5", "#4eb3d3", "#2b8cbe", "#08
 
 #Load in filtered feature matrix output from Cellranger, please specify your own path in ("/path/.../filtered_feature_bc_matrix/")
 
-SrcGFP_1.data <- Read10X("/path/.../may2024/may_2024_raw/SrcGFP_4/filtered_feature_bc_matrix/")
-SrcGFP_2.data <- Read10X("/path/.../may2024/may_2024_raw/SrcGFP_3/filtered_feature_bc_matrix/")
+SrcGFP_1.data <- Read10X("/path/.../may2024/may_2024_raw/SrcGFP_1/filtered_feature_bc_matrix/")
+SrcGFP_2.data <- Read10X("/path/.../may2024/may_2024_raw/SrcGFP_2/filtered_feature_bc_matrix/")
 ArmYFP.data <- Read10X("/path/../may2024/may_2024_raw/ArmYFP/filtered_feature_bc_matrix/")
 
 #Generate Seurat Object for each batch and genotype 
@@ -150,8 +150,8 @@ write.csv(CellsToKeep, "/path/.../CellsToKeep.csv")
 #Final Dataset Generation (generating may2024.rds)-----------------
 #Load in filtered feature matrix output from Cellranger, please specify your own path ("/path/../filtered_feature_bc_matrix/")
 
-SrcGFP_1.data <- Read10X("/path/.../may_2024_raw/SrcGFP_4/filtered_feature_bc_matrix/")
-SrcGFP_2.data <- Read10X("/path/.../may_2024_raw/SrcGFP_3/filtered_feature_bc_matrix/")
+SrcGFP_1.data <- Read10X("/path/.../may_2024_raw/SrcGFP_1/filtered_feature_bc_matrix/")
+SrcGFP_2.data <- Read10X("/path/.../may_2024_raw/SrcGFP_2/filtered_feature_bc_matrix/")
 ArmYFP.data <- Read10X("/path/.../may_2024_raw/ArmYFP/filtered_feature_bc_matrix/")
 
 #Generate Seurat Object for each batch and genotype 
