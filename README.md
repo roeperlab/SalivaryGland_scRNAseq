@@ -1,4 +1,4 @@
-Welcome to paperplanning hub for May et al 2024!
+Welcome to the github repo for May et al 2024!
 
 * Final dataset can be found at GEO acession number XXXX - the final dataset used in the paper is file may2024.rds which can be loaded into R and be used as the starting point for any of the analyses below.
 * Complete.analysis contains all analysis from loading data the raw data through all generated figures in the paper.
@@ -11,4 +11,4 @@ If you are looking for only a specific analysis/figure please see a breakdown of
 * Pseudotime: Figure 3E and F, load in may2024.rds apply subclustering rules and use monocle3 to plot pseudotime values, identfy genes differentially expressed across pseudotime
 * Excluded_genes_volcano_plot: Figure 4A and 4C, load in may2024.rds and plot the excluded genes across the different timed cluster points as well as the enhancer of split genes.
 
-All code written by me unless outlined in the comments. 
+Analysis performed by Annabel May (github.com/annabel-may)
