@@ -10,7 +10,7 @@ UMAPcols <- dittoColors()
 featureplotcols <- c("#e0f3db", "#ccebc5", "#a8ddb5", "#4eb3d3", "#2b8cbe", "#0868ac", "#084081")
 
 #Load in the final dataset-----------------
-may2024 <- readRDS("/Volumes/Macintosh HD/Users/amay/Documents/GitHubTest/may2024.rds")
+may2024 <- readRDS(".../may2024.rds")
 
 #Cell type clusters--------------
 #Find markers for each cluster, generates table used find cell types labelled in figure 2A
