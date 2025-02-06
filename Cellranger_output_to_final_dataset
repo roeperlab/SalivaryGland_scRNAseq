@@ -1,11 +1,13 @@
 # Processing of data generated through cellranger. Start here to generate R seurat object used in the paper from the original cellranger outputs. 
-# If you would like to skip this step and load in the final dataset please load in may2024.rds found in GEO database, accession number XXXXXXXX.
+# If you would like to skip this step and load in the final dataset please load in may2024.rds found in GEO database, accession number GSE271294.
 
 # This code generatings the following: 
-# * may2024_cellspreremoval.rds file (plotted in figure S2A and S2A') 
-# * Clustree figure (plotted in figure S2A" and S2B)
-# * Marker gene lists used for GO term generation for clusters (found in figure S2B')
-# * postQC.sct_Rplremoved (plotted in figure S2C)
+# * PreQCvlnplot (plotted in figure S2A) 
+# * may2024_cellspreremoval.rds file (plotted in figure S2B and S2B') 
+# * Clustree figure (plotted in figure S2B")
+# * Marker gene lists used for GO term generation for clusters (found in figure S2C')
+# * postQC.sct_Rplremoved (plotted in figure S2D)
+# * Post QC UMAPs (plotted in figure 2SE)
 # * cellstokeep.cvs (used to specify cells analysed in the rest of the paper)
 # * may2024.rds (final dataset used throughout the rest of the paper)
 
@@ -24,7 +26,8 @@ featureplotcols <- c("#e0f3db", "#ccebc5", "#a8ddb5", "#4eb3d3", "#2b8cbe", "#08
 
 #Load in filtered feature matrix output from Cellranger, please specify your own path ("/path/../filtered_feature_bc_matrix/")
 
-SrcGFP_1.data <- Read10X("/path/.../may_2024_raw/SrcGFP_1/filtered_feature_bc_matrix/")
+
+SrcGFP_1.data <-Read10X("/path/.../may_2024_raw/SrcGFP_1/filtered_feature_bc_matrix/")
 SrcGFP_2.data <- Read10X("/path/.../may_2024_raw/SrcGFP_2/filtered_feature_bc_matrix/")
 ArmYFP.data <- Read10X("/path/.../may_2024_raw/ArmYFP/filtered_feature_bc_matrix/")
 
@@ -63,7 +66,7 @@ p2 <- VlnPlot(preQCmerge, features = c("nCount_RNA"), split.by = "orig.ident", g
 p3 <- VlnPlot(preQCmerge, features = c("percent.mt"), split.by = "orig.ident", group.by = "orig.ident") + geom_hline(yintercept = 10, color="red", linetype="dashed") + theme(legend.position = 'none') 
 p4 <- VlnPlot(preQCmerge, features = c("percent.ribo"), split.by = "orig.ident", group.by = "orig.ident")
 
-wrap_plots(p1, p2, p3,p4, ncol = 4)
+PreQCvlnplot <- wrap_plots(p1, p2, p3,p4, ncol = 4)
 
 #Subset dataset with quality control limits
 postQC <- subset(preQCmerge, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & nCount_RNA <10000 & percent.mt < 10)
@@ -142,7 +145,7 @@ postQC.sct_res0.3_markers <- FindAllMarkers(postQC.sct)
 write.csv(postQC.sct_res0.3_markers, "/path/.../may2024_cellspreremoval_markers_res0.3.cvs")
 
 #Poor quality cell removal------------------
-#Remove cluster 0 and 3 due to enrichment of Ribosomal and chromosmal protein markers (see clustree section for decision to remove 0 and 3), plotted in figure S2C
+#At resolution 0.3 - Remove cluster 0 and 3 due to enrichment of Ribosomal and chromosmal protein markers (see clustree section for decision to remove 0 and 3), plotted in figure S2C
 CellsToKeep <- WhichCells(postQC.sct, ident = c("1", "2",  "4", "5", "6","7",  "8",  "9",  "10", "11", "12", "13", "14"))
 postQC.sct_Rplremoved <- subset(postQC.sct, cells= CellsToKeep)
 DimPlot(postQC.sct_Rplremoved, pt.size = 2, cols = UMAPcols)
@@ -236,6 +239,12 @@ DimPlot(may2024, reduction = "umap", group.by = "orig.ident", cols = UMAPcols, p
 may2024 <- FindNeighbors(may2024, reduction = "pca", dims = 1:11)
 may2024 <- FindClusters(may2024, resolution = 0.17)
 DimPlot(may2024, pt.size = 2, cols = UMAPcols)
+
+#Plot original QC catgeories on UMAP, consider doublet removal techniques if clear clustering by one cateogry.
+FeaturePlot(may2024, features = "nFeature_RNA", pt.size = 2, cols = featureplotcols, order = T)
+FeaturePlot(may2024, features = "nCount_RNA", pt.size = 2, cols = featureplotcols, order = T)
+FeaturePlot(may2024, features = "percent.mt", pt.size = 2, cols = featureplotcols, order = T)
+FeaturePlot(may2024, features = "percent.ribo", pt.size = 2, cols = featureplotcols, order = T)
 
 #Save final integrated dataset (please specify your own path)
 saveRDS(may2024, "/path/.../may2024.rds")
