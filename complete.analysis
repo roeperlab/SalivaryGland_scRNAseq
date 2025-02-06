@@ -1,5 +1,11 @@
 # Welcome to complete.analysis, this code should run you through all analysis covered in our paper. 
 
+# To follow this complete analyis you start with cellranger outputs which can be downloaded in GSE271294_RAW.tar found in GEO: GSE271294. Unzip this file and put each file extracted into the following format:
+# place all files with GSM8374105_SrcGFP_1 them into a directory path of  .../may_2024_raw/SrcGFP_1/filtered_feature_bc_matrix/
+# place all files with GSM8374106_SrcGFP_2 them into a directory path of  .../may_2024_raw/SrcGFP_2/filtered_feature_bc_matrix/
+# place all files with GSM8374107_ArmYFP them into a directory path of .../may_2024_raw/ArmYFP/filtered_feature_bc_matrix/
+# Remove the prefix from each file name once in the directories to leave 3 files per folder called: barcodes.tsv.gz, features.tsv.gz and matrix.mtx.gz
+
 library(dittoSeq)
 library(Seurat)
 library(patchwork)
@@ -671,5 +677,66 @@ heatSmooth <- pheatmap(t(scale(t(yhatSmooth[, 1:1000]))),
                        cluster_cols = F,
                        show_rownames = T, 
                        show_colnames = T, cluster_rows = F)
+
+
+may2024@active.assay <- "integrated" 
+
+#Additional subclustering of epidermal/early salivary gland cluster-----------------
+#Identify cells of interest "Epidermal cells and early salivary cluster" is cluster 1 at resolution 0.17
+DimPlot(may2024, pt.size = 2, cols = UMAPcols)
+may2024_subset <- may2024
+EpidermalCluster <- WhichCells(may2024_subset, idents = c("1"))
+
+#Increase clustering resolution for clustree to further subdivide cluster
+EpidermalCluster_clustree <- may2024_subset
+EpidermalCluster_clustree <- FindClusters(EpidermalCluster_clustree, resolution = c(seq(0, to = 0.5, by=0.1)))
+EpidermalCluster_clustree <- FindClusters(EpidermalCluster_clustree, resolution = 0.17)
+EpidermalCluster_clustree <- FindClusters(EpidermalCluster_clustree, resolution = 1)
+DimPlot(EpidermalCluster_clustree, cols = UMAPcols, pt.size = 2, cells = EpidermalCluster)
+EpidermalCluster_clustree@meta.data <- EpidermalCluster_clustree@meta.data[, paste0("integrated_snn_res.", c(0, 0.17, 0.2, 0.3, 0.4, 0.5, 1))]
+
+#Subset the dataset to focus on just the epidermial/early salivary gland cluster, plot the clustree for these cells to see how this cluster subdivides
+EpidermalCluster_clustree_subset <- subset(EpidermalCluster_clustree, cells = EpidermalCluster)
+clustree(EpidermalCluster_clustree_subset, node_size_range = c(1, 35), node_text_size = 7, edge_width = 2) + scale_color_manual(values= featureplotcols)
+
+#Calculate how many cells deviate into differnet clusters (resolution 0.3, figure S3B)
+EpidermalCluster_0.3 <- FindClusters(EpidermalCluster_clustree, resolution = 0.3)
+DimPlot(EpidermalCluster_0.3, cols = UMAPcols, pt.size = 2)
+DimPlot(EpidermalCluster_0.3, cols = UMAPcols, pt.size = 2, cells = EpidermalCluster)
+
+length(WhichCells(EpidermalCluster_0.3, cells = EpidermalCluster, idents = "0"))
+length(WhichCells(EpidermalCluster_0.3, cells = EpidermalCluster, idents = "1"))
+length(WhichCells(EpidermalCluster_0.3, cells = EpidermalCluster, idents = "6"))
+
+#Identify marker genes for newly emerged cluster 6, top markers in EpidermalCluster_0.3_c6_Markers file in figure S3B
+EpidermalCluster_0.3@active.assay <- "SCT" 
+EpidermalCluster_0.3 <-PrepSCTFindMarkers(EpidermalCluster_0.3)
+EpidermalCluster_0.3_Markers <- FindAllMarkers(EpidermalCluster_0.3)
+DimPlot(EpidermalCluster_0.3, cols = UMAPcols, pt.size = 2, cells = EpidermalCluster)
+EpidermalCluster_0.3_c6_Markers <- EpidermalCluster_0.3_Markers[EpidermalCluster_0.3_Markers$cluster == "6",]
+
+#Calculate how many cells deviate into differnet clusters (resolution 0.5, figure S3C)
+EpidermalCluster_0.5 <- FindClusters(EpidermalCluster_clustree, resolution = 0.5)
+DimPlot(EpidermalCluster_0.5, cols = UMAPcols, pt.size = 2)
+DimPlot(EpidermalCluster_0.5, cols = UMAPcols, pt.size = 2, cells = EpidermalCluster)
+
+length(WhichCells(EpidermalCluster_0.5, cells = EpidermalCluster, idents = "0"))
+length(WhichCells(EpidermalCluster_0.5, cells = EpidermalCluster, idents = "10"))
+length(WhichCells(EpidermalCluster_0.5, cells = EpidermalCluster, idents = "4"))
+length(WhichCells(EpidermalCluster_0.5, cells = EpidermalCluster, idents = "3"))
+
+#Calculate how many cells deviate into differnet clusters, to identify marker genes between 4 and 3, explore EpidermalCluster_0.5_Markers file
+EpidermalCluster_0.5@active.assay <- "SCT" 
+EpidermalCluster_0.5 <-PrepSCTFindMarkers(EpidermalCluster_0.5)
+EpidermalCluster_0.5_Markers <- FindMarkers(EpidermalCluster_0.5, ident.1 = "4", ident.2 = "3")
+DimPlot(EpidermalCluster_0.5, cols = UMAPcols, pt.size = 2, cells = EpidermalCluster)
+
+#Check top markers for each cluster on UMAP (Figure S3C')
+FeaturePlot(EpidermalCluster_0.5, cells = EpidermalCluster, features = "Ubx", pt.size = 2, order = T, cols = featureplotcols)
+FeaturePlot(EpidermalCluster_0.5, cells = EpidermalCluster, features = "ab", pt.size = 2, order = T, cols = featureplotcols)
+FeaturePlot(EpidermalCluster_0.5, cells = EpidermalCluster, features = "vvl", pt.size = 2, order = T, cols = featureplotcols)
+FeaturePlot(EpidermalCluster_0.5, cells = EpidermalCluster, features = "disco", pt.size = 2, order = T, cols = featureplotcols)
+FeaturePlot(EpidermalCluster_0.5, cells = EpidermalCluster, features = "disco-r", pt.size = 2, order = T, cols = featureplotcols)
+FeaturePlot(EpidermalCluster_0.5, cells = EpidermalCluster, features = "Pvf3", pt.size = 2, order = T, cols = featureplotcols)
 
 
