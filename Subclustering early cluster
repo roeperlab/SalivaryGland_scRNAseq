@@ -1,0 +1,74 @@
+# This file generates all figures and tables shown in supplementary figure 3
+
+library(dittoSeq)
+library(Seurat)
+library(clustree)
+
+set.seed(20022021)
+
+#Aesthetic-----------------
+UMAPcols <- dittoColors()
+featureplotcols <- c("#e0f3db", "#ccebc5", "#a8ddb5", "#4eb3d3", "#2b8cbe", "#0868ac", "#084081")
+
+#Load in the final dataset-----------------
+may2024 <- readRDS(".../may2024.rds")
+may2024@active.assay <- "integrated" 
+
+#Additional subclustering-----------------
+#Identify cells of interest "Epidermal cells and early salivary cluster" is cluster 1 at resolution 0.17
+DimPlot(may2024, pt.size = 2, cols = UMAPcols)
+may2024_subset <- may2024
+EpidermalCluster <- WhichCells(may2024_subset, idents = c("1"))
+
+#Increase clustering resolution for clustree to further subdivide cluster
+EpidermalCluster_clustree <- may2024_subset
+EpidermalCluster_clustree <- FindClusters(EpidermalCluster_clustree, resolution = c(seq(0, to = 0.5, by=0.1)))
+EpidermalCluster_clustree <- FindClusters(EpidermalCluster_clustree, resolution = 0.17)
+EpidermalCluster_clustree <- FindClusters(EpidermalCluster_clustree, resolution = 1)
+DimPlot(EpidermalCluster_clustree, cols = UMAPcols, pt.size = 2, cells = EpidermalCluster)
+EpidermalCluster_clustree@meta.data <- EpidermalCluster_clustree@meta.data[, paste0("integrated_snn_res.", c(0, 0.17, 0.2, 0.3, 0.4, 0.5, 1))]
+
+#Subset the dataset to focus on just the epidermial/early salivary gland cluster, plot the clustree for these cells to see how this cluster subdivides
+EpidermalCluster_clustree_subset <- subset(EpidermalCluster_clustree, cells = EpidermalCluster)
+clustree(EpidermalCluster_clustree_subset, node_size_range = c(1, 35), node_text_size = 7, edge_width = 2) + scale_color_manual(values= featureplotcols)
+
+#Calculate how many cells deviate into differnet clusters (resolution 0.3, figure S3B)
+EpidermalCluster_0.3 <- FindClusters(EpidermalCluster_clustree, resolution = 0.3)
+DimPlot(EpidermalCluster_0.3, cols = UMAPcols, pt.size = 2)
+DimPlot(EpidermalCluster_0.3, cols = UMAPcols, pt.size = 2, cells = EpidermalCluster)
+
+length(WhichCells(EpidermalCluster_0.3, cells = EpidermalCluster, idents = "0"))
+length(WhichCells(EpidermalCluster_0.3, cells = EpidermalCluster, idents = "1"))
+length(WhichCells(EpidermalCluster_0.3, cells = EpidermalCluster, idents = "6"))
+
+#Identify marker genes for newly emerged cluster 6, top markers in EpidermalCluster_0.3_c6_Markers file in figure S3B
+EpidermalCluster_0.3@active.assay <- "SCT" 
+EpidermalCluster_0.3 <-PrepSCTFindMarkers(EpidermalCluster_0.3)
+EpidermalCluster_0.3_Markers <- FindAllMarkers(EpidermalCluster_0.3)
+DimPlot(EpidermalCluster_0.3, cols = UMAPcols, pt.size = 2, cells = EpidermalCluster)
+EpidermalCluster_0.3_c6_Markers <- EpidermalCluster_0.3_Markers[EpidermalCluster_0.3_Markers$cluster == "6",]
+
+#Calculate how many cells deviate into differnet clusters (resolution 0.5, figure S3C)
+EpidermalCluster_0.5 <- FindClusters(EpidermalCluster_clustree, resolution = 0.5)
+DimPlot(EpidermalCluster_0.5, cols = UMAPcols, pt.size = 2)
+DimPlot(EpidermalCluster_0.5, cols = UMAPcols, pt.size = 2, cells = EpidermalCluster)
+
+length(WhichCells(EpidermalCluster_0.5, cells = EpidermalCluster, idents = "0"))
+length(WhichCells(EpidermalCluster_0.5, cells = EpidermalCluster, idents = "10"))
+length(WhichCells(EpidermalCluster_0.5, cells = EpidermalCluster, idents = "4"))
+length(WhichCells(EpidermalCluster_0.5, cells = EpidermalCluster, idents = "3"))
+
+#Calculate how many cells deviate into differnet clusters, to identify marker genes between 4 and 3, explore EpidermalCluster_0.5_Markers file
+EpidermalCluster_0.5@active.assay <- "SCT" 
+EpidermalCluster_0.5 <-PrepSCTFindMarkers(EpidermalCluster_0.5)
+EpidermalCluster_0.5_Markers <- FindMarkers(EpidermalCluster_0.5, ident.1 = "4", ident.2 = "3")
+DimPlot(EpidermalCluster_0.5, cols = UMAPcols, pt.size = 2, cells = EpidermalCluster)
+
+#Check top markers for each cluster on UMAP (Figure S3C')
+FeaturePlot(EpidermalCluster_0.5, cells = EpidermalCluster, features = "Ubx", pt.size = 2, order = T, cols = featureplotcols)
+FeaturePlot(EpidermalCluster_0.5, cells = EpidermalCluster, features = "ab", pt.size = 2, order = T, cols = featureplotcols)
+FeaturePlot(EpidermalCluster_0.5, cells = EpidermalCluster, features = "vvl", pt.size = 2, order = T, cols = featureplotcols)
+FeaturePlot(EpidermalCluster_0.5, cells = EpidermalCluster, features = "disco", pt.size = 2, order = T, cols = featureplotcols)
+FeaturePlot(EpidermalCluster_0.5, cells = EpidermalCluster, features = "disco-r", pt.size = 2, order = T, cols = featureplotcols)
+FeaturePlot(EpidermalCluster_0.5, cells = EpidermalCluster, features = "Pvf3", pt.size = 2, order = T, cols = featureplotcols)
+
